@@ -42,18 +42,18 @@ export function AdminMatchRow({
   }
 
   return (
-    <article className="rounded-3xl border border-white/10 bg-[#142033] p-4 shadow-card">
+    <article className="rounded-3xl border border-secondary/50 bg-secondary p-4 shadow-card transition hover:scale-105 duration-200">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-textMuted">{roundLabel(match.bracket, match.round)}</p>
-          <h3 className="mt-1 text-lg font-black text-white">
+          <h3 className="mt-1 text-lg font-black text-slate-100">
             Day {match.scheduled_day} — Match {match.match_number}
           </h3>
           <p className="text-xs text-textMuted">{formatAestDateTime(match.played_at)}</p>
         </div>
         <span
           className={`rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.3em] ${
-            match.status === 'live' ? 'border-red-500/40 bg-red-500/10 text-red-300' : match.status === 'completed' ? 'border-win/40 bg-win/10 text-win' : 'border-white/10 bg-white/5 text-textMuted'
+            match.status === 'live' ? 'border-red-500/40 bg-red-500/10 text-red-300' : match.status === 'completed' ? 'border-gold/40 bg-gold/10 text-gold' : 'border-secondary/50 bg-secondary text-textMuted'
           }`}
         >
           {match.status}
@@ -71,7 +71,7 @@ export function AdminMatchRow({
         <button type="button" onClick={() => run({ action: 'set-live', matchId: match.id })} className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-extrabold text-red-300">
           Set Live
         </button>
-        <button type="button" onClick={() => run({ action: 'complete', matchId: match.id })} className="rounded-2xl border border-win/40 bg-win/10 px-4 py-3 text-sm font-extrabold text-win">
+        <button type="button" onClick={() => run({ action: 'complete', matchId: match.id })} className="rounded-2xl border border-gold/40 bg-gold/10 px-4 py-3 text-sm font-extrabold text-gold">
           Complete Match
         </button>
       </div>
@@ -83,7 +83,7 @@ export function AdminMatchRow({
               key={slot}
               type="button"
               onClick={() => run({ action: 'undo', matchId: match.id, slot: slot as 1 | 2 | 3 | 4 })}
-              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-white"
+              className="rounded-2xl border border-secondary/50 bg-secondary px-4 py-3 text-sm font-bold text-slate-100 transition hover:scale-105 duration-200"
             >
               Undo Team {slot} Point
             </button>
@@ -91,8 +91,8 @@ export function AdminMatchRow({
         )}
       </div>
 
-      <details className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-3">
-        <summary className="cursor-pointer text-sm font-black uppercase tracking-[0.28em] text-win">Edit Teams</summary>
+      <details className="mt-4 rounded-2xl border border-secondary/50 bg-black/20 p-3">
+        <summary className="cursor-pointer text-sm font-black uppercase tracking-[0.28em] text-gold">Edit Teams</summary>
         <div className="mt-4 space-y-4">
           {linkedTeams.map((team) => (
             <TeamEditor key={team.id} team={team} teams={teams} onSave={onRefresh} />
@@ -100,16 +100,16 @@ export function AdminMatchRow({
         </div>
       </details>
 
-      <details className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-3">
-        <summary className="cursor-pointer text-sm font-black uppercase tracking-[0.28em] text-win">Manual Advance</summary>
+      <details className="mt-3 rounded-2xl border border-secondary/50 bg-black/20 p-3">
+        <summary className="cursor-pointer text-sm font-black uppercase tracking-[0.28em] text-gold">Manual Advance</summary>
         <div className="mt-4 flex flex-wrap gap-2">
           {linkedTeams.map((team) => (
             <button
               key={team.id}
               type="button"
               onClick={() => setSelectedWinners((current) => (current.includes(team.id) ? current.filter((id) => id !== team.id) : [...current, team.id]))}
-              className={`rounded-full border px-3 py-2 text-xs font-black uppercase tracking-[0.22em] ${
-                selectedWinners.includes(team.id) ? 'border-win/40 bg-win/15 text-win' : 'border-white/10 bg-white/5 text-white'
+              className={`rounded-full border px-3 py-2 text-xs font-black uppercase tracking-[0.22em] transition hover:scale-105 duration-200 ${
+                selectedWinners.includes(team.id) ? 'border-gold/40 bg-gold/15 text-gold' : 'border-secondary/50 bg-secondary text-slate-100'
               }`}
             >
               {displayTeamName(team.name)}
@@ -120,7 +120,7 @@ export function AdminMatchRow({
           type="button"
           disabled={saving || selectedWinners.length === 0}
           onClick={() => run({ action: 'manual-advance', matchId: match.id, winnerIds: selectedWinners })}
-          className="mt-4 rounded-2xl border border-win/40 bg-win/10 px-4 py-3 text-sm font-extrabold text-win disabled:opacity-40"
+          className="mt-4 rounded-2xl border border-gold/40 bg-gold/10 px-4 py-3 text-sm font-extrabold text-gold disabled:opacity-40 transition hover:scale-105 duration-200"
         >
           Advance Selected
         </button>
@@ -146,29 +146,30 @@ function TeamEditor({ team, onSave }: { team: Team; teams: Team[]; onSave: () =>
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+    <div className="rounded-2xl border border-secondary/50 bg-secondary p-3">
       <div className="grid gap-2 md:grid-cols-2">
-        <input value={name} onChange={(event) => setName(event.target.value)} className="rounded-xl border border-white/10 bg-[#0f1c2e] px-3 py-2 text-sm text-white uppercase outline-none" />
-        <select value={status} onChange={(event) => setStatus(event.target.value as Team['status'])} className="rounded-xl border border-white/10 bg-[#0f1c2e] px-3 py-2 text-sm text-white outline-none">
+        <input value={name} onChange={(event) => setName(event.target.value)} className="rounded-xl border border-secondary/50 bg-[#0f1c2e] px-3 py-2 text-sm text-slate-100 uppercase outline-none" />
+        <select value={status} onChange={(event) => setStatus(event.target.value as Team['status'])} className="rounded-xl border border-secondary/50 bg-[#0f1c2e] px-3 py-2 text-sm text-slate-100 outline-none">
           <option value="active">active</option>
           <option value="eliminated">eliminated</option>
           <option value="bye">bye</option>
         </select>
-        <input value={player1} onChange={(event) => setPlayer1(event.target.value)} className="rounded-xl border border-white/10 bg-[#0f1c2e] px-3 py-2 text-sm text-white outline-none" />
-        <input value={player2} onChange={(event) => setPlayer2(event.target.value)} className="rounded-xl border border-white/10 bg-[#0f1c2e] px-3 py-2 text-sm text-white outline-none" />
+        <input value={player1} onChange={(event) => setPlayer1(event.target.value)} className="rounded-xl border border-secondary/50 bg-[#0f1c2e] px-3 py-2 text-sm text-slate-100 outline-none" />
+        <input value={player2} onChange={(event) => setPlayer2(event.target.value)} className="rounded-xl border border-secondary/50 bg-[#0f1c2e] px-3 py-2 text-sm text-slate-100 outline-none" />
       </div>
       <div className="mt-2 flex items-center gap-2">
-        <select value={skillLevel} onChange={(event) => setSkillLevel(Number(event.target.value))} className="rounded-xl border border-white/10 bg-[#0f1c2e] px-3 py-2 text-sm text-white outline-none">
+        <select value={skillLevel} onChange={(event) => setSkillLevel(Number(event.target.value))} className="rounded-xl border border-secondary/50 bg-[#0f1c2e] px-3 py-2 text-sm text-slate-100 outline-none">
           {[5, 4, 3, 2, 1].map((value) => (
             <option key={value} value={value}>
               Skill {value}
             </option>
           ))}
         </select>
-        <button type="button" onClick={save} className="rounded-xl border border-win/40 bg-win/10 px-4 py-2 text-sm font-black text-win">
+        <button type="button" onClick={save} className="rounded-xl border border-gold/40 bg-gold/10 px-4 py-2 text-sm font-black text-gold transition hover:scale-105 duration-200">
           Save
         </button>
       </div>
     </div>
   );
 }
+

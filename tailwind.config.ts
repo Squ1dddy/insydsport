@@ -5,19 +5,22 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        navy: '#0F1C2E',
-        panel: '#1B2A4A',
-        textMuted: '#8A9BB5',
-        win: '#F5C400',
-        eliminated: '#3A4A5C',
-        skill5: '#22C55E',
-        skill4: '#3B82F6',
-        skill3: '#F59E0B',
-        skill2: '#EF4444',
-        skill1: '#A855F7'
+        primary: '#0B1320', // Dark Navy
+        secondary: '#142033', // Lighter Navy
+        gold: '#F5C400', // Accent
+        textMuted: '#94A3B8', // Soft Gray
+        eliminated: '#3A4A5C'
+      },
+      fontFamily: {
+        sans: ['Inter', 'sans-serif']
       },
       boxShadow: {
         card: '0 12px 40px rgba(0, 0, 0, 0.32)'
+      },
+      animation: {
+        scorePop: 'scorePop 220ms ease-out',
+        livePulse: 'livePulse 1.6s ease-in-out infinite',
+        dotPulse: 'dotPulse 1.2s ease-in-out infinite'
       },
       keyframes: {
         scorePop: {
@@ -32,11 +35,6 @@ const config: Config = {
           '0%, 100%': { transform: 'scale(1)', opacity: '0.8' },
           '50%': { transform: 'scale(1.2)', opacity: '1' }
         }
-      },
-      animation: {
-        scorePop: 'scorePop 220ms ease-out',
-        livePulse: 'livePulse 1.6s ease-in-out infinite',
-        dotPulse: 'dotPulse 1.2s ease-in-out infinite'
       }
     }
   },

@@ -3,7 +3,8 @@
 import { useMemo, useState } from 'react';
 import { useTournament } from '@/components/tournament-provider';
 import type { BracketName, EnrichedMatch, Team } from '@/types/tournament';
-import { displayTeamName, formatAestDateTime, getMatchPlacements } from '@/lib/tournament-utils';
+import { displayTeamName, formatAestDateTime, getMatchPlacements, matchLabel, matchTeamsLabel, roundLabel } from '@/lib/tournament-utils';
+import { motion } from 'framer-motion';
 
 type Filter = 'all' | BracketName | 'round';
 
@@ -28,22 +29,22 @@ export default function HistoryPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       <div className="flex flex-wrap items-center gap-3">
         {(['all', 'senior', 'junior', 'round'] as Filter[]).map((item) => (
           <button
             key={item}
             type="button"
             onClick={() => setFilter(item)}
-            className={`rounded-full px-4 py-2 text-sm font-black uppercase tracking-[0.26em] ${
-              filter === item ? 'bg-win text-[#0f1c2e]' : 'border border-white/10 bg-white/5 text-textMuted'
+            className={`rounded-full px-5 py-2 text-sm font-black uppercase tracking-[0.26em] transition-all duration-200 hover:scale-105 ${
+              filter === item ? 'bg-gold text-primary' : 'border border-secondary bg-primary text-textMuted hover:text-slate-100'
             }`}
           >
             {item === 'all' ? 'All' : item === 'senior' ? 'Seniors' : item === 'junior' ? 'Juniors' : 'By Round'}
           </button>
         ))}
         {filter === 'round' ? (
-          <select value={round} onChange={(event) => setRound(event.target.value)} className="rounded-full border border-white/10 bg-[#101a2a] px-4 py-2 text-sm font-bold text-white">
+          <select value={round} onChange={(event) => setRound(event.target.value)} className="rounded-full border border-secondary bg-primary px-4 py-2 text-sm font-bold text-slate-100 outline-none">
             {['1', '2', '3', '4', '5'].map((item) => (
               <option key={item} value={item}>
                 Round {item}
@@ -57,10 +58,10 @@ export default function HistoryPage() {
         {matches.length > 0 ? (
           matches.map((match) => <HistoryRow key={match.id} match={match} />)
         ) : (
-          <div className="rounded-3xl border border-dashed border-white/10 bg-white/5 px-4 py-8 text-center text-textMuted">No completed matches yet.</div>
+          <div className="rounded-3xl border border-dashed border-secondary bg-primary px-4 py-8 text-center text-textMuted">No completed matches yet.</div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -70,18 +71,22 @@ function HistoryRow({ match }: { match: EnrichedMatch }) {
   const title = visibleTeams.map((team) => displayTeamName(team.name)).join(' · ');
 
   return (
-    <article className="rounded-3xl border border-white/10 bg-[#132136] p-5 shadow-card">
+    <motion.article 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="group relative rounded-3xl border border-secondary bg-primary p-5 shadow-card transition-all duration-300 hover:scale-[1.01] hover:border-gold/30"
+    >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-[11px] font-black uppercase tracking-[0.32em] text-win">
+          <p className="text-[11px] font-black uppercase tracking-[0.32em] text-gold">
             Day {match.scheduled_day} · Match {match.match_number}
           </p>
-          <h3 className="mt-2 text-lg font-black leading-tight text-white lg:text-xl">{title}</h3>
+          <h3 className="mt-2 text-lg font-black leading-tight text-slate-100 lg:text-xl">{title}</h3>
           <p className="mt-2 text-sm text-textMuted">{formatAestDateTime(match.played_at)}</p>
         </div>
         <span
           className={`shrink-0 rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.28em] ${
-            match.status === 'completed' ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200' : 'border-win/40 bg-win/10 text-win'
+            match.status === 'completed' ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200' : 'border-gold/40 bg-gold/10 text-gold'
           }`}
         >
           {match.status === 'completed' ? 'COMPLETED' : 'UPCOMING'}
@@ -94,7 +99,7 @@ function HistoryRow({ match }: { match: EnrichedMatch }) {
         ))}
       </div>
       {tieAtCutoff ? <div className="mt-4 text-xs font-bold uppercase tracking-[0.25em] text-amber-200">Tie detected — admin review required</div> : null}
-    </article>
+    </motion.article>
   );
 }
 
@@ -113,28 +118,24 @@ function HistoryTeamCard({
 
   return (
     <div
-      className={`group relative rounded-2xl border px-4 py-4 transition ${
-        isTie ? 'border-amber-400/60 bg-amber-400/10' : isAdvanced ? 'border-win/60 bg-win/10' : 'border-red-500/30 bg-red-500/5'
+      className={`group relative rounded-2xl border px-4 py-4 transition-all duration-300 ${
+        isTie ? 'border-amber-400/60 bg-amber-400/10' : isAdvanced ? 'border-gold/60 bg-gold/10' : 'border-secondary bg-primary'
       }`}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className={`break-words text-sm font-black leading-tight ${isAdvanced ? 'text-win' : isTie ? 'text-amber-200' : 'text-white'}`}>{displayTeamName(team.name)}</p>
+          <p className={`break-words text-sm font-black leading-tight ${isAdvanced ? 'text-gold' : isTie ? 'text-amber-200' : 'text-slate-100'}`}>{displayTeamName(team.name)}</p>
           <p className="mt-2 text-xs leading-5 text-textMuted">
-            {team.player1} · {team.player2}
+            {team.player1} · {team.player2} · {team.year_group}
           </p>
         </div>
         <span
           className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-black uppercase tracking-[0.22em] ${
-            isTie ? 'border-amber-400/40 bg-amber-400/15 text-amber-200' : isAdvanced ? 'border-win/40 bg-win/15 text-win' : 'border-red-500/40 bg-red-500/10 text-red-200'
+            isTie ? 'border-amber-400/40 bg-amber-400/15 text-amber-200' : isAdvanced ? 'border-gold/40 bg-gold/15 text-gold' : 'border-secondary bg-primary text-textMuted'
           }`}
         >
           {isTie ? 'TIE' : isAdvanced ? 'ADVANCED' : 'ELIMINATED'}
         </span>
-      </div>
-
-      <div className="absolute inset-x-4 top-full z-20 mt-2 hidden rounded-xl border border-white/10 bg-[#101a2a] px-3 py-2 text-xs font-bold text-white shadow-card group-hover:block">
-        Score: {score}
       </div>
     </div>
   );

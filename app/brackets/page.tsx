@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import { BracketTree } from '@/components/bracket-tree';
 import { useTournament } from '@/components/tournament-provider';
 import type { BracketName } from '@/types/tournament';
+import { Skeleton } from '@/components/ui/skeleton';
+import { motion } from 'framer-motion';
 
 export default function BracketsPage() {
   const { data, loading, error } = useTournament();
@@ -14,7 +16,12 @@ export default function BracketsPage() {
   const totalRounds = bracket === 'senior' ? 5 : 4;
 
   if (loading) {
-    return <div className="rounded-3xl border border-white/10 bg-white/5 p-8 text-center text-textMuted">Loading brackets...</div>;
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-96 w-full" />
+      </div>
+    );
   }
 
   if (error) {
@@ -22,8 +29,8 @@ export default function BracketsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full w-full space-y-6 p-2 lg:p-4">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex items-center gap-2">
           {(['senior', 'junior'] as BracketName[]).map((item) => (
             <button
@@ -33,8 +40,8 @@ export default function BracketsPage() {
                 setBracket(item);
                 setActiveRound(1);
               }}
-              className={`rounded-full px-5 py-2 text-sm font-black uppercase tracking-[0.3em] transition-all ${
-                bracket === item ? 'bg-win text-[#0f1c2e]' : 'border border-white/10 bg-white/5 text-textMuted hover:text-white'
+              className={`rounded-full px-6 py-2 text-sm font-black uppercase tracking-[0.3em] transition-all duration-200 hover:scale-105 ${
+                bracket === item ? 'bg-gold text-primary' : 'border border-secondary bg-primary text-textMuted hover:text-slate-100'
               }`}
             >
               {item === 'senior' ? 'Seniors' : 'Juniors'}
@@ -42,24 +49,27 @@ export default function BracketsPage() {
           ))}
         </div>
         
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-2 sm:pb-0">
+        <div className="flex h-14 items-center gap-2 overflow-x-clip overflow-y-hidden pb-3 pr-3 sm:pb-0 sm:pr-0">
           {Array.from({ length: totalRounds }, (_, i) => i + 1).map((round) => (
-            <button
-              key={round}
-              onClick={() => setActiveRound(round)}
-              className={`whitespace-nowrap rounded-full px-4 py-2 text-[11px] font-black uppercase tracking-[0.2em] transition-all ${
-                activeRound === round 
-                  ? 'border-win bg-win/20 text-win' 
-                  : 'border-white/10 bg-white/5 text-textMuted hover:border-white/20 hover:text-white'
-              } border`}
-            >
-              R{round}
-            </button>
+            <div key={round} className="flex h-12 items-center justify-center px-1">
+              <button
+                onClick={() => setActiveRound(round)}
+                className={`whitespace-nowrap rounded-full px-5 py-2 text-xs font-black uppercase tracking-[0.2em] transition-all duration-200 hover:scale-105 ${
+                  activeRound === round 
+                    ? 'border-gold bg-gold/20 text-gold' 
+                    : 'border-secondary bg-primary text-textMuted hover:border-gold/30 hover:text-slate-100'
+                } border`}
+              >
+                Round {round}
+              </button>
+            </div>
           ))}
         </div>
       </div>
 
-      <BracketTree matches={matches} bracket={bracket} highlightRound={activeRound} />
-    </div>
+      <div className="w-full">
+        <BracketTree matches={matches} bracket={bracket} highlightRound={activeRound} />
+      </div>
+    </motion.div>
   );
 }

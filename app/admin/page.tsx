@@ -11,6 +11,7 @@ import {
   matchTeamsLabel,
   roundLabel
 } from '@/lib/tournament-utils';
+import { motion } from 'framer-motion';
 
 const STORAGE_KEY = 'inner-sydney-admin-auth-password';
 type TabKey = 'live' | 'past' | 'teams';
@@ -115,17 +116,17 @@ export default function AdminPage() {
 
   if (!authed) {
     return (
-      <div className="mx-auto max-w-xl rounded-[2rem] border border-white/10 bg-white/5 p-6 shadow-card">
-        <h1 className="text-3xl font-black text-white">Admin login</h1>
+      <div className="mx-auto max-w-xl rounded-[2rem] border border-secondary bg-primary p-6 shadow-card">
+        <h1 className="text-3xl font-black text-slate-100">Admin login</h1>
         <p className="mt-2 text-sm text-textMuted">Shared password gate for tournament control.</p>
         <input
           type="password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           placeholder="Enter password"
-          className="mt-5 w-full rounded-2xl border border-white/10 bg-[#101a2a] px-4 py-3 text-white outline-none"
+          className="mt-5 w-full rounded-2xl border border-secondary bg-secondary px-4 py-3 text-slate-100 outline-none focus:border-gold"
         />
-        <button onClick={login} className="mt-4 w-full rounded-2xl bg-win px-4 py-3 text-sm font-black text-[#0f1c2e]">
+        <button onClick={login} className="mt-4 w-full rounded-2xl bg-gold px-4 py-3 text-sm font-black text-primary transition-all duration-200 hover:scale-[1.02]">
           Unlock
         </button>
         {loginError ? <p className="mt-3 text-sm text-red-300">{loginError}</p> : null}
@@ -134,7 +135,7 @@ export default function AdminPage() {
   }
 
   if (loading) {
-    return <div className="rounded-3xl border border-white/10 bg-white/5 p-8 text-center text-textMuted">Loading admin dashboard...</div>;
+    return <div className="rounded-3xl border border-secondary bg-primary p-8 text-center text-textMuted">Loading admin dashboard...</div>;
   }
 
   if (error) {
@@ -142,12 +143,12 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-[2rem] border border-white/10 bg-[#15233a] p-4 shadow-card">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+      <section className="rounded-[2rem] border border-secondary bg-primary p-4 shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.35em] text-win">Admin dashboard</p>
-            <h1 className="mt-1 text-3xl font-black text-white">Match management</h1>
+            <p className="text-[11px] font-black uppercase tracking-[0.35em] text-gold">Admin dashboard</p>
+            <h1 className="mt-1 text-3xl font-black text-slate-100">Match management</h1>
           </div>
           <div className="flex flex-wrap gap-2">
             {[
@@ -159,8 +160,8 @@ export default function AdminPage() {
                 key={key}
                 type="button"
                 onClick={() => setTab(key as TabKey)}
-                className={`rounded-full px-4 py-2 text-sm font-black uppercase tracking-[0.22em] ${
-                  tab === key ? 'bg-win text-[#0f1c2e]' : 'border border-white/10 bg-white/5 text-textMuted'
+                className={`rounded-full px-4 py-2 text-sm font-black uppercase tracking-[0.22em] transition-all duration-200 hover:scale-105 ${
+                  tab === key ? 'bg-gold text-primary shadow-lg' : 'border border-secondary bg-primary text-textMuted hover:text-slate-100'
                 }`}
               >
                 {label}
@@ -195,7 +196,7 @@ export default function AdminPage() {
           onClearScores={clearAllScores}
         />
       ) : null}
-    </div>
+    </motion.div>
   );
 }
 
@@ -255,7 +256,7 @@ function LiveScoringTab({
 
   return (
     <section className="space-y-5">
-      <div className="rounded-[2rem] border border-white/10 bg-white/5 p-4 shadow-card">
+      <div className="rounded-[2rem] border border-secondary bg-primary p-4 shadow-card">
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex-1 min-w-[280px] space-y-2 text-sm font-bold text-textMuted">
             <span className="block uppercase tracking-[0.28em]">Select upcoming match</span>
@@ -265,22 +266,22 @@ function LiveScoringTab({
                 setSelectedLiveMatchId(event.target.value);
                 setSelectedWinners([]);
               }}
-              className="w-full rounded-2xl border border-white/10 bg-[#101a2a] px-4 py-3 text-white"
+              className="w-full rounded-2xl border border-secondary bg-primary px-4 py-3 text-slate-100 outline-none focus:border-gold"
             >
-              <optgroup label="Seniors" className="bg-[#101a2a] text-win">
+              <optgroup label="Seniors" className="bg-primary text-gold">
                 {matches
                   .filter((m) => m.bracket === 'senior')
                   .map((match) => (
-                    <option key={match.id} value={match.id} className="text-white">
+                    <option key={match.id} value={match.id} className="text-slate-100">
                       {matchLabel(match)} — {matchTeamsLabel(match)}
                     </option>
                   ))}
               </optgroup>
-              <optgroup label="Juniors" className="bg-[#101a2a] text-win">
+              <optgroup label="Juniors" className="bg-primary text-gold">
                 {matches
                   .filter((m) => m.bracket === 'junior')
                   .map((match) => (
-                    <option key={match.id} value={match.id} className="text-white">
+                    <option key={match.id} value={match.id} className="text-slate-100">
                       {matchLabel(match)} — {matchTeamsLabel(match)}
                     </option>
                   ))}
@@ -291,7 +292,7 @@ function LiveScoringTab({
             type="button"
             onClick={setLive}
             disabled={!selectedMatch}
-            className="rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-red-200 disabled:opacity-40"
+            className="rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-red-200 transition-all duration-200 hover:scale-105 disabled:opacity-40"
           >
             Set Live
           </button>
@@ -331,8 +332,8 @@ function LiveScoringTab({
                         selectedWinners.includes(team.id) ? selectedWinners.filter((id) => id !== team.id) : [...selectedWinners, team.id]
                       )
                     }
-                    className={`rounded-full border px-3 py-2 text-xs font-black uppercase tracking-[0.22em] ${
-                      selectedWinners.includes(team.id) ? 'border-win/40 bg-win/15 text-win' : 'border-white/10 bg-white/5 text-white'
+                    className={`rounded-full border px-3 py-2 text-xs font-black uppercase tracking-[0.22em] transition-all duration-200 ${
+                      selectedWinners.includes(team.id) ? 'border-gold/40 bg-gold/15 text-gold' : 'border-secondary bg-primary text-slate-100'
                     }`}
                   >
                     {displayTeamName(team.name)}
@@ -346,13 +347,13 @@ function LiveScoringTab({
             type="button"
             onClick={completeMatch}
             disabled={!selectedMatch || (tieInfo?.tieAtCutoff ? selectedWinners.length !== 2 : false)}
-            className="w-full rounded-2xl bg-emerald-500 px-6 py-4 text-sm font-black uppercase tracking-[0.26em] text-white disabled:opacity-40"
+            className="w-full rounded-2xl bg-emerald-500 px-6 py-4 text-sm font-black uppercase tracking-[0.26em] text-slate-100 transition-all duration-200 hover:scale-[1.01] disabled:opacity-40"
           >
             Complete Match
           </button>
         </>
       ) : (
-        <div className="rounded-3xl border border-dashed border-white/10 bg-white/5 px-4 py-10 text-center text-textMuted">No upcoming matches available.</div>
+        <div className="rounded-3xl border border-dashed border-secondary bg-primary px-4 py-10 text-center text-textMuted">No upcoming matches available.</div>
       )}
     </section>
   );
@@ -372,26 +373,26 @@ function LiveScoreCard({
   onMinus: () => void;
 }) {
   return (
-    <article className={`min-h-[280px] rounded-[2rem] border bg-[linear-gradient(180deg,rgba(27,42,74,0.95),rgba(10,18,30,0.98))] p-4 shadow-card ${active ? 'border-win/70' : 'border-white/10'}`}>
+    <article className={`min-h-[280px] rounded-[2rem] border bg-secondary p-4 shadow-card transition-all duration-300 hover:scale-[1.02] ${active ? 'border-gold/70' : 'border-secondary'}`}>
       <div className="flex h-full flex-col">
         <div className="text-center">
-          <p className="text-sm font-black uppercase tracking-[0.24em] text-white">{team ? displayTeamName(team.name) : 'TBD'}</p>
+          <p className="text-sm font-black uppercase tracking-[0.24em] text-slate-100">{team ? displayTeamName(team.name) : 'TBD'}</p>
         </div>
         <div className="flex flex-1 items-center justify-center">
-          <span className={`text-[6rem] font-black leading-none ${active ? 'text-win' : 'text-white'}`}>{score}</span>
+          <span className={`text-[6rem] font-black leading-none ${active ? 'text-gold' : 'text-slate-100'}`}>{score}</span>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <button
             type="button"
             onClick={onMinus}
-            className={`min-h-20 rounded-2xl border text-4xl font-black ${active ? 'border-win/40 bg-win/10 text-win' : 'border-white/10 bg-white/5 text-white'}`}
+            className={`min-h-20 rounded-2xl border text-4xl font-black transition-all duration-200 hover:scale-105 ${active ? 'border-gold/40 bg-gold/10 text-gold' : 'border-secondary bg-primary text-slate-100'}`}
           >
             −
           </button>
           <button
             type="button"
             onClick={onPlus}
-            className={`min-h-20 rounded-2xl border text-4xl font-black ${active ? 'border-win/40 bg-win/10 text-win' : 'border-white/10 bg-white/5 text-white'}`}
+            className={`min-h-20 rounded-2xl border text-4xl font-black transition-all duration-200 hover:scale-105 ${active ? 'border-gold/40 bg-gold/10 text-gold' : 'border-secondary bg-primary text-slate-100'}`}
           >
             +
           </button>
@@ -423,7 +424,7 @@ function PastGamesTab({
           onRefresh={onRefresh}
         />
       ))}
-      {matches.length === 0 ? <div className="rounded-3xl border border-dashed border-white/10 bg-white/5 px-4 py-8 text-center text-textMuted">No completed matches yet.</div> : null}
+      {matches.length === 0 ? <div className="rounded-3xl border border-dashed border-secondary bg-primary px-4 py-8 text-center text-textMuted">No completed matches yet.</div> : null}
     </section>
   );
 }
@@ -479,31 +480,31 @@ function PastGameEditor({
   }
 
   return (
-    <article className="rounded-[2rem] border border-white/10 bg-[#142033] p-4 shadow-card">
+    <article className="rounded-[2rem] border border-secondary bg-primary p-4 shadow-card transition-all duration-300 hover:scale-[1.01] hover:border-gold/30">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.32em] text-win">
+          <p className="text-[11px] font-black uppercase tracking-[0.32em] text-gold">
             {matchLabel(match)}
           </p>
-          <p className="mt-2 text-sm font-black text-white">{matchTeamsLabel(match)}</p>
+          <p className="mt-2 text-sm font-black text-slate-100">{matchTeamsLabel(match)}</p>
           <p className="mt-2 text-xs text-textMuted">{formatAestDateTime(match.played_at)}</p>
         </div>
-        <button type="button" onClick={onToggle} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-black uppercase tracking-[0.22em] text-white">
+        <button type="button" onClick={onToggle} className="rounded-full border border-secondary bg-primary px-3 py-2 text-xs font-black uppercase tracking-[0.22em] text-slate-100 transition-all duration-200 hover:scale-105">
           {expanded ? 'Hide Edit Scores' : 'Edit Scores'}
         </button>
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {teams.map((team, index) => (
-          <div key={team.id} className={`rounded-2xl border px-4 py-3 ${outcome.placements.get(team.id) === 'advanced' ? 'border-win/50 bg-win/10' : 'border-red-500/30 bg-red-500/5'}`}>
+          <div key={team.id} className={`rounded-2xl border px-4 py-3 ${outcome.placements.get(team.id) === 'advanced' ? 'border-gold/50 bg-gold/10' : 'border-red-500/30 bg-red-500/5'}`}>
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="font-black text-white">{displayTeamName(team.name)}</p>
+                <p className="font-black text-slate-100">{displayTeamName(team.name)}</p>
                 <p className="text-xs text-textMuted">
                   {team.player1} · {team.player2}
                 </p>
               </div>
-              <span className={`rounded-full border px-2 py-1 text-[10px] font-black uppercase tracking-[0.22em] ${outcome.placements.get(team.id) === 'advanced' ? 'border-win/40 bg-win/15 text-win' : 'border-red-500/40 bg-red-500/10 text-red-200'}`}>
+              <span className={`rounded-full border px-2 py-1 text-[10px] font-black uppercase tracking-[0.22em] ${outcome.placements.get(team.id) === 'advanced' ? 'border-gold/40 bg-gold/15 text-gold' : 'border-red-500/40 bg-red-500/10 text-red-200'}`}>
                 {outcome.placements.get(team.id) === 'advanced' ? 'ADVANCED' : outcome.placements.get(team.id) === 'tie' ? 'TIE' : 'ELIMINATED'}
               </span>
             </div>
@@ -520,7 +521,7 @@ function PastGameEditor({
                       next[index] = Number(event.target.value);
                       setScores(next);
                     }}
-                    className="mt-1 w-full rounded-xl border border-white/10 bg-[#101a2a] px-3 py-2 text-white"
+                    className="mt-1 w-full rounded-xl border border-secondary bg-primary px-3 py-2 text-slate-100"
                   />
                 </label>
                 <label className="text-xs font-bold text-textMuted">
@@ -532,7 +533,7 @@ function PastGameEditor({
                       next[index] = event.target.value as PlacementChoice;
                       setPlacements(next);
                     }}
-                    className="mt-1 w-full rounded-xl border border-white/10 bg-[#101a2a] px-3 py-2 text-white"
+                    className="mt-1 w-full rounded-xl border border-secondary bg-primary px-3 py-2 text-slate-100"
                   >
                     <option value="auto">Auto</option>
                     <option value="advanced">Advanced</option>
@@ -546,7 +547,7 @@ function PastGameEditor({
       </div>
 
       {expanded ? (
-        <button type="button" onClick={save} className="mt-4 rounded-2xl bg-win px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-[#0f1c2e]">
+        <button type="button" onClick={save} className="mt-4 rounded-2xl bg-gold px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-primary transition-all duration-200 hover:scale-105">
           Save Changes
         </button>
       ) : null}
@@ -575,7 +576,7 @@ function TeamManagementTab({
     year_group: string;
     status: Team['status'];
   };
-  setNewTeam: (value: TeamManagementTabProps['newTeam'] | ((prev: TeamManagementTabProps['newTeam']) => TeamManagementTabProps['newTeam'])) => void;
+  setNewTeam: (value: any) => void;
   onRefresh: () => Promise<unknown>;
   onReset: () => Promise<void>;
   onClearScores: () => Promise<void>;
@@ -586,12 +587,12 @@ function TeamManagementTab({
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5 shadow-card">
-        <h2 className="text-2xl font-black text-white">Teams</h2>
+      <section className="rounded-[2rem] border border-secondary bg-primary p-5 shadow-card">
+        <h2 className="text-2xl font-black text-slate-100">Teams</h2>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <TeamCreateForm newTeam={newTeam} setNewTeam={setNewTeam} onRefresh={onRefresh} />
-          <div className="rounded-2xl border border-white/10 bg-[#101a2a] p-4">
-            <p className="text-sm font-black uppercase tracking-[0.24em] text-win">Quick notes</p>
+          <div className="rounded-2xl border border-secondary bg-primary p-4">
+            <p className="text-sm font-black uppercase tracking-[0.24em] text-gold">Quick notes</p>
             <p className="mt-2 text-sm text-textMuted">Edit, add, or delete teams from the lists below. Team names render uppercase throughout the site.</p>
           </div>
         </div>
@@ -599,18 +600,18 @@ function TeamManagementTab({
         <TeamList title="Juniors" teams={juniors} onRefresh={onRefresh} />
       </section>
 
-      <section className="rounded-[2rem] border border-white/10 bg-white/5 p-5 shadow-card">
-        <h2 className="text-2xl font-black text-white">Upcoming Matches</h2>
+      <section className="rounded-[2rem] border border-secondary bg-primary p-5 shadow-card">
+        <h2 className="text-2xl font-black text-slate-100">Upcoming Matches</h2>
         <div className="mt-4 space-y-3">
           {upcomingMatches.map((match) => (
             <UpcomingMatchEditor key={match.id} match={match} teams={teams} onRefresh={onRefresh} />
           ))}
-          {upcomingMatches.length === 0 ? <div className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-4 py-8 text-center text-textMuted">No upcoming matches.</div> : null}
+          {upcomingMatches.length === 0 ? <div className="rounded-2xl border border-dashed border-secondary bg-primary px-4 py-8 text-center text-textMuted">No upcoming matches.</div> : null}
         </div>
       </section>
 
       <section className="rounded-[2rem] border border-red-500/20 bg-red-500/5 p-5 shadow-card">
-        <h2 className="text-2xl font-black text-white">Danger Zone</h2>
+        <h2 className="text-2xl font-black text-slate-100">Danger Zone</h2>
         <div className="mt-4 flex flex-wrap gap-3">
           <button
             type="button"
@@ -619,7 +620,7 @@ function TeamManagementTab({
                 await onClearScores();
               }
             }}
-            className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-white"
+            className="rounded-2xl border border-secondary bg-primary px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-slate-100 transition-all duration-200 hover:scale-105"
           >
             Clear All Scores
           </button>
@@ -653,8 +654,8 @@ function TeamCreateForm({
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#101a2a] p-4">
-      <p className="text-sm font-black uppercase tracking-[0.24em] text-win">Add New Team</p>
+    <div className="rounded-2xl border border-secondary bg-primary p-4">
+      <p className="text-sm font-black uppercase tracking-[0.24em] text-gold">Add New Team</p>
       <div className="mt-3 grid gap-3">
         {[
           ['name', 'Team name'],
@@ -667,24 +668,24 @@ function TeamCreateForm({
             value={(newTeam as any)[field]}
             onChange={(event) => setNewTeam((current: any) => ({ ...current, [field]: event.target.value }))}
             placeholder={label}
-            className="rounded-xl border border-white/10 bg-[#0f1c2e] px-3 py-2 text-sm text-white outline-none"
+            className="rounded-xl border border-secondary bg-primary px-3 py-2 text-sm text-slate-100 outline-none"
           />
         ))}
         <div className="grid grid-cols-2 gap-2">
-          <select value={newTeam.skill_level} onChange={(event) => setNewTeam((current: any) => ({ ...current, skill_level: Number(event.target.value) }))} className="rounded-xl border border-white/10 bg-[#0f1c2e] px-3 py-2 text-sm text-white">
+          <select value={newTeam.skill_level} onChange={(event) => setNewTeam((current: any) => ({ ...current, skill_level: Number(event.target.value) }))} className="rounded-xl border border-secondary bg-primary px-3 py-2 text-sm text-slate-100">
             {[5, 4, 3, 2, 1].map((value) => (
               <option key={value} value={value}>
                 Skill {value}
               </option>
             ))}
           </select>
-          <select value={newTeam.bracket} onChange={(event) => setNewTeam((current: any) => ({ ...current, bracket: event.target.value as BracketName }))} className="rounded-xl border border-white/10 bg-[#0f1c2e] px-3 py-2 text-sm text-white">
+          <select value={newTeam.bracket} onChange={(event) => setNewTeam((current: any) => ({ ...current, bracket: event.target.value as BracketName }))} className="rounded-xl border border-secondary bg-primary px-3 py-2 text-sm text-slate-100">
             <option value="senior">Senior</option>
             <option value="junior">Junior</option>
           </select>
         </div>
       </div>
-      <button type="button" onClick={save} className="mt-3 rounded-2xl bg-win px-4 py-3 text-sm font-black uppercase tracking-[0.22em] text-[#0f1c2e]">
+      <button type="button" onClick={save} className="mt-3 rounded-2xl bg-gold px-4 py-3 text-sm font-black uppercase tracking-[0.22em] text-primary transition-all duration-200 hover:scale-105">
         Create Team
       </button>
     </div>
@@ -694,7 +695,7 @@ function TeamCreateForm({
 function TeamList({ title, teams, onRefresh }: { title: string; teams: Team[]; onRefresh: () => Promise<unknown> }) {
   return (
     <div className="mt-5">
-      <h3 className="text-lg font-black uppercase tracking-[0.22em] text-win">{title}</h3>
+      <h3 className="text-lg font-black uppercase tracking-[0.22em] text-gold">{title}</h3>
       <div className="mt-3 space-y-3">
         {teams.map((team) => (
           <TeamRowEditor key={team.id} team={team} onRefresh={onRefresh} />
@@ -732,34 +733,34 @@ function TeamRowEditor({ team, onRefresh }: { team: Team; onRefresh: () => Promi
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#101a2a] p-4">
+    <div className="rounded-2xl border border-secondary bg-primary p-4 transition-all duration-300 hover:border-gold/30">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="font-black text-white">{displayTeamName(team.name)}</p>
+          <p className="font-black text-slate-100">{displayTeamName(team.name)}</p>
           <p className="text-xs text-textMuted">
             {team.player1} · {team.player2} · Skill {team.skill_level} · {team.bracket} · {team.status}
           </p>
         </div>
         <div className="flex gap-2">
-          <button type="button" onClick={() => setEditing((value) => !value)} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-black uppercase tracking-[0.2em] text-white">
+          <button type="button" onClick={() => setEditing((value) => !value)} className="rounded-full border border-secondary bg-primary px-3 py-2 text-xs font-black uppercase tracking-[0.2em] text-slate-100 transition-all duration-200 hover:scale-105">
             Edit
           </button>
-          <button type="button" onClick={remove} className="rounded-full border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs font-black uppercase tracking-[0.2em] text-red-200">
+          <button type="button" onClick={remove} className="rounded-full border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs font-black uppercase tracking-[0.2em] text-red-200 transition-all duration-200 hover:scale-105">
             Delete
           </button>
         </div>
       </div>
       {editing ? (
         <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <input value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} className="rounded-xl border border-white/10 bg-[#0f1c2e] px-3 py-2 text-sm text-white uppercase" />
-          <select value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value as Team['status'] }))} className="rounded-xl border border-white/10 bg-[#0f1c2e] px-3 py-2 text-sm text-white">
+          <input value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} className="rounded-xl border border-secondary bg-primary px-3 py-2 text-sm text-slate-100 uppercase" />
+          <select value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value as Team['status'] }))} className="rounded-xl border border-secondary bg-primary px-3 py-2 text-sm text-slate-100">
             <option value="active">active</option>
             <option value="eliminated">eliminated</option>
             <option value="bye">bye</option>
           </select>
-          <input value={draft.player1} onChange={(event) => setDraft((current) => ({ ...current, player1: event.target.value }))} className="rounded-xl border border-white/10 bg-[#0f1c2e] px-3 py-2 text-sm text-white" />
-          <input value={draft.player2} onChange={(event) => setDraft((current) => ({ ...current, player2: event.target.value }))} className="rounded-xl border border-white/10 bg-[#0f1c2e] px-3 py-2 text-sm text-white" />
-          <select value={draft.skill_level} onChange={(event) => setDraft((current) => ({ ...current, skill_level: Number(event.target.value) }))} className="rounded-xl border border-white/10 bg-[#0f1c2e] px-3 py-2 text-sm text-white">
+          <input value={draft.player1} onChange={(event) => setDraft((current) => ({ ...current, player1: event.target.value }))} className="rounded-xl border border-secondary bg-primary px-3 py-2 text-sm text-slate-100" />
+          <input value={draft.player2} onChange={(event) => setDraft((current) => ({ ...current, player2: event.target.value }))} className="rounded-xl border border-secondary bg-primary px-3 py-2 text-sm text-slate-100" />
+          <select value={draft.skill_level} onChange={(event) => setDraft((current) => ({ ...current, skill_level: Number(event.target.value) }))} className="rounded-xl border border-secondary bg-primary px-3 py-2 text-sm text-slate-100">
             {[5, 4, 3, 2, 1].map((value) => (
               <option key={value} value={value}>
                 Skill {value}
@@ -767,7 +768,7 @@ function TeamRowEditor({ team, onRefresh }: { team: Team; onRefresh: () => Promi
             ))}
           </select>
           <div />
-          <button type="button" onClick={save} className="rounded-xl bg-win px-4 py-3 text-sm font-black uppercase tracking-[0.22em] text-[#0f1c2e]">
+          <button type="button" onClick={save} className="rounded-xl bg-gold px-4 py-3 text-sm font-black uppercase tracking-[0.22em] text-primary transition-all duration-200 hover:scale-105">
             Save
           </button>
         </div>
@@ -801,22 +802,22 @@ function UpcomingMatchEditor({ match, teams, onRefresh }: { match: EnrichedMatch
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#101a2a] p-4">
+    <div className="rounded-2xl border border-secondary bg-primary p-4 transition-all duration-300 hover:border-gold/30">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.28em] text-win">
+          <p className="text-[11px] font-black uppercase tracking-[0.28em] text-gold">
             {matchLabel(match)}
           </p>
-          <p className="mt-2 text-sm font-black text-white">{matchTeamsLabel(match)}</p>
+          <p className="mt-2 text-sm font-black text-slate-100">{matchTeamsLabel(match)}</p>
         </div>
-        <button type="button" onClick={save} className="rounded-full border border-win/40 bg-win/10 px-3 py-2 text-xs font-black uppercase tracking-[0.2em] text-win">
+        <button type="button" onClick={save} className="rounded-full border border-gold/40 bg-gold/10 px-3 py-2 text-xs font-black uppercase tracking-[0.2em] text-gold transition-all duration-200 hover:scale-105">
           Save
         </button>
       </div>
       <div className="mt-4 grid gap-2 md:grid-cols-5">
-        <input type="number" value={draft.scheduled_day} onChange={(event) => setDraft((current) => ({ ...current, scheduled_day: Number(event.target.value) }))} className="rounded-xl border border-white/10 bg-[#0f1c2e] px-3 py-2 text-sm text-white" />
+        <input type="number" value={draft.scheduled_day} onChange={(event) => setDraft((current) => ({ ...current, scheduled_day: Number(event.target.value) }))} className="rounded-xl border border-secondary bg-primary px-3 py-2 text-sm text-slate-100" />
         {(['team1_id', 'team2_id', 'team3_id', 'team4_id'] as const).map((field) => (
-          <select key={field} value={draft[field]} onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))} className="rounded-xl border border-white/10 bg-[#0f1c2e] px-3 py-2 text-sm text-white">
+          <select key={field} value={draft[field]} onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))} className="rounded-xl border border-secondary bg-primary px-3 py-2 text-sm text-slate-100">
             <option value="">{field.toUpperCase()}</option>
             {teams.map((team) => (
               <option key={team.id} value={team.id}>
@@ -829,15 +830,3 @@ function UpcomingMatchEditor({ match, teams, onRefresh }: { match: EnrichedMatch
     </div>
   );
 }
-
-type TeamManagementTabProps = {
-  newTeam: {
-    name: string;
-    player1: string;
-    player2: string;
-    skill_level: number;
-    bracket: BracketName;
-    year_group: string;
-    status: Team['status'];
-  };
-};

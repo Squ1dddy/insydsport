@@ -29,7 +29,7 @@ export function ScoreButton({
 
   const base =
     tone === 'yellow'
-      ? 'border-win/40 bg-win/15 text-win hover:bg-win/25'
+      ? 'border-gold/40 bg-gold/15 text-gold hover:bg-gold/25'
       : 'border-white/15 bg-white/5 text-white hover:bg-white/10';
 
   return (
@@ -43,9 +43,11 @@ export function ScoreButton({
         }
         setArmed(true);
       }}
-      className={`min-h-14 w-full rounded-2xl border px-4 py-3 text-sm font-extrabold transition ${base} ${armed ? 'animate-scorePop ring-2 ring-win/70' : ''}`}
+      className={`min-h-14 w-full rounded-2xl border px-4 py-3 text-sm font-extrabold transition ${base} ${armed ? 'animate-scorePop ring-2 ring-gold/70' : ''}`}
     >
       {armed ? 'Tap again to confirm' : label}
     </button>
   );
 }
+
+

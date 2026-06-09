@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,15 +9,15 @@
 }
 
 html {
-  background: #0f1c2e;
+  background: #0b1320;
 }
 
 body {
   margin: 0;
-  background:
-    radial-gradient(circle at top, rgba(245, 196, 0, 0.08), transparent 24%),
-    linear-gradient(180deg, #12213a 0%, #0f1c2e 35%, #0b1320 100%);
+  font-family: 'Inter', sans-serif;
+  background: #0b1320;
   color: #fff;
+  min-height: 100vh;
 }
 
 a {

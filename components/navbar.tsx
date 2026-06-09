@@ -28,13 +28,13 @@ export function Navbar() {
   const liveMatches = data?.matches.filter((match) => match.status === 'live').length || 0;
 
   return (
-    <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0b1320]/90 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 lg:px-6">
+    <header className="sticky top-0 z-50 border-b border-secondary/50 bg-[#0b1320]/90 backdrop-blur-xl">
+      <div className="mx-auto flex w-full items-center justify-between gap-4 px-6 py-3 md:px-8 lg:px-10">
         <Link href="/" className="flex items-center gap-3">
           <Logo />
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.35em] text-win">Inner Sydney</p>
-            <p className="text-lg font-black uppercase tracking-[0.18em] text-white">Handball Knockout</p>
+            <p className="text-xs font-black uppercase tracking-[0.35em] text-gold">Inner Sydney</p>
+            <p className="text-lg font-black uppercase tracking-[0.18em] text-slate-100">Handball Knockout</p>
           </div>
         </Link>
 
@@ -44,8 +44,8 @@ export function Navbar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`rounded-full px-3 py-2 text-sm font-bold transition ${
-                pathname === item.href ? 'bg-win text-[#0f1c2e]' : 'text-textMuted hover:bg-white/5 hover:text-white'
+              className={`rounded-full px-3 py-2 text-sm font-bold transition hover:scale-105 duration-200 ${
+                pathname === item.href ? 'bg-gold text-[#0f1c2e]' : 'text-textMuted hover:bg-secondary hover:text-slate-100'
               }`}
             >
               {item.label}

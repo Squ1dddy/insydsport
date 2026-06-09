@@ -2,6 +2,7 @@
 
 import type { BracketName, EnrichedMatch, Team } from '@/types/tournament';
 import { displayTeamName, roundLabel, winnerIdsForMatch } from '@/lib/tournament-utils';
+import { TeamTooltip } from '@/components/team-tooltip';
 
 const roundCounts: Record<BracketName, number> = {
   senior: 5,
@@ -35,19 +36,19 @@ function TeamLine({
   const placement = match.status === 'completed' ? getPlacement(match, team.id) : 'upcoming';
   const tone =
     placement === 'advanced'
-      ? 'text-win'
+      ? 'text-gold'
       : placement === 'eliminated'
         ? 'text-eliminated line-through decoration-white/30'
-        : 'text-white';
+        : 'text-slate-100';
 
   return (
-    <div className={`group flex items-center justify-between gap-3 rounded-xl px-2 py-1.5 ${tone}`}>
-    <div className="flex min-w-0 items-center gap-2">
-      <span className="min-w-0 break-words text-[12px] font-black leading-tight">{displayTeamName(team.name)}</span>
-    </div>
+    <div className={`flex items-center justify-between gap-3 rounded-xl px-2 py-1.5 ${tone}`}>
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="min-w-0 break-words text-[12px] font-black leading-tight">{displayTeamName(team.name)}</span>
+      </div>
       <div className="flex shrink-0 items-center gap-2 text-xs font-black">
         <span>{score}</span>
-        {placement === 'advanced' ? <span className="rounded-full border border-win/40 bg-win/10 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.16em] text-win">ADV</span> : null}
+        {placement === 'advanced' ? <span className="rounded-full border border-gold/40 bg-gold/10 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.16em] text-gold">ADV</span> : null}
       </div>
     </div>
   );
@@ -56,14 +57,14 @@ function TeamLine({
 function BracketNode({ match, lastRound }: { match: EnrichedMatch; lastRound: boolean }) {
   return (
     <article
-      className={`relative rounded-2xl border bg-[linear-gradient(180deg,rgba(27,42,74,0.94),rgba(10,18,30,0.98))] p-3 shadow-card ${
-        match.status === 'live' ? 'border-win/70 animate-livePulse' : 'border-white/10'
+      className={`group relative rounded-2xl border bg-[linear-gradient(180deg,rgba(27,42,74,0.94),rgba(10,18,30,0.98))] p-3 shadow-card transition-all duration-300 hover:scale-[1.02] hover:border-gold/30 ${
+        match.status === 'live' ? 'border-gold/70 animate-livePulse' : 'border-secondary'
       }`}
     >
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.34em] text-textMuted">{roundLabel(match.bracket, match.round)}</p>
-          <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.2em] text-win/90">
+          <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.2em] text-gold/90">
             Day {match.scheduled_day} · Match {match.match_number}
           </p>
         </div>
@@ -72,7 +73,7 @@ function BracketNode({ match, lastRound }: { match: EnrichedMatch; lastRound: bo
             match.status === 'live'
               ? 'border-red-500/40 bg-red-500/10 text-red-300'
               : match.status === 'completed'
-                ? 'border-win/40 bg-win/10 text-win'
+                ? 'border-gold/40 bg-gold/10 text-gold'
                 : 'border-white/10 bg-white/5 text-textMuted'
           }`}
         >
@@ -88,7 +89,7 @@ function BracketNode({ match, lastRound }: { match: EnrichedMatch; lastRound: bo
       </div>
 
       {match.status === 'completed' && !lastRound ? (
-        <span className="absolute right-[-1.25rem] top-1/2 hidden h-px w-5 bg-win/50 md:block" />
+        <span className="absolute right-[-1.25rem] top-1/2 hidden h-px w-5 bg-gold/50 md:block" />
       ) : null}
     </article>
   );
@@ -98,7 +99,7 @@ export function BracketTree({ matches, bracket, highlightRound }: { matches: Enr
   const totalRounds = roundCounts[bracket];
 
   return (
-    <div className="w-full overflow-hidden">
+    <div className="w-full">
       <div className={`grid w-full gap-3 md:gap-4`} style={{ gridTemplateColumns: `repeat(${totalRounds}, minmax(0, 1fr))` }}>
         {Array.from({ length: totalRounds }, (_, index) => {
           const roundNumber = index + 1;
@@ -115,7 +116,7 @@ export function BracketTree({ matches, bracket, highlightRound }: { matches: Enr
                   : 'border-white/5 bg-transparent opacity-30 grayscale pointer-events-none'
               } p-2 md:p-3`}
             >
-              <div className={`mb-3 rounded-xl border px-3 py-2 text-center text-[11px] font-black uppercase tracking-[0.28em] ${isHighlighted ? 'border-white/10 bg-[#111c2e] text-win' : 'border-transparent text-textMuted'}`}>
+              <div className={`mb-3 rounded-xl border px-3 py-2 text-center text-[11px] font-black uppercase tracking-[0.28em] ${isHighlighted ? 'border-white/10 bg-[#111c2e] text-gold' : 'border-transparent text-textMuted'}`}>
                 {roundLabel(bracket, roundNumber)}
               </div>
               <div className="space-y-3">
