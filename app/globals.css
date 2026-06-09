@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  background: #0f1c2e;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top, rgba(245, 196, 0, 0.08), transparent 24%),
+    linear-gradient(180deg, #12213a 0%, #0f1c2e 35%, #0b1320 100%);
+  color: #fff;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: rgba(245, 196, 0, 0.35);
+}
