@@ -1,8 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import type { BracketName, EnrichedMatch, Team } from '@/types/tournament';
 import { displayTeamName, roundLabel, winnerIdsForMatch } from '@/lib/tournament-utils';
-import { TeamTooltip } from '@/components/team-tooltip';
 
 const roundCounts: Record<BracketName, number> = {
   senior: 5,
@@ -54,7 +54,7 @@ function TeamLine({
   );
 }
 
-function BracketNode({ match, lastRound }: { match: EnrichedMatch; lastRound: boolean }) {
+function BracketNode({ match }: { match: EnrichedMatch }) {
   return (
     <article
       className={`group relative rounded-2xl border bg-[linear-gradient(180deg,rgba(27,42,74,0.94),rgba(10,18,30,0.98))] p-3 shadow-card transition-all duration-300 hover:scale-[1.02] hover:border-gold/30 ${
@@ -87,45 +87,53 @@ function BracketNode({ match, lastRound }: { match: EnrichedMatch; lastRound: bo
         <TeamLine match={match} team={match.team3 || null} score={match.team3_score} />
         <TeamLine match={match} team={match.team4 || null} score={match.team4_score} />
       </div>
-
-      {match.status === 'completed' && !lastRound ? (
-        <span className="absolute right-[-1.25rem] top-1/2 hidden h-px w-5 bg-gold/50 md:block" />
-      ) : null}
     </article>
   );
 }
 
 export function BracketTree({ matches, bracket, highlightRound }: { matches: EnrichedMatch[]; bracket: BracketName; highlightRound?: number }) {
   const totalRounds = roundCounts[bracket];
+  const [collapsedRounds, setCollapsedRounds] = useState<number[]>([]);
+
+  const toggleRound = (round: number) => {
+    setCollapsedRounds(prev => prev.includes(round) ? prev.filter(r => r !== round) : [...prev, round]);
+  };
 
   return (
     <div className="w-full">
-      <div className={`grid w-full gap-3 md:gap-4`} style={{ gridTemplateColumns: `repeat(${totalRounds}, minmax(0, 1fr))` }}>
+      <div className="grid w-full gap-4 md:grid-cols-1 lg:grid-cols-5">
         {Array.from({ length: totalRounds }, (_, index) => {
           const roundNumber = index + 1;
           const roundMatches = matches.filter((match) => match.round === roundNumber).sort((a, b) => a.match_number - b.match_number);
-          const lastRound = index === totalRounds - 1;
+          const isCollapsed = collapsedRounds.includes(roundNumber);
           const isHighlighted = highlightRound === undefined || highlightRound === roundNumber;
 
           return (
             <section 
               key={roundNumber} 
-              className={`min-w-0 rounded-[1.25rem] border transition-all duration-500 ${
-                isHighlighted 
-                  ? 'border-white/10 bg-white/5 opacity-100' 
-                  : 'border-white/5 bg-transparent opacity-30 grayscale pointer-events-none'
-              } p-2 md:p-3`}
+              className={`flex flex-col rounded-[1.25rem] border transition-all duration-300 ${
+                isHighlighted ? 'border-secondary bg-primary' : 'border-secondary/30 bg-primary/50'
+              } p-4`}
             >
-              <div className={`mb-3 rounded-xl border px-3 py-2 text-center text-[11px] font-black uppercase tracking-[0.28em] ${isHighlighted ? 'border-white/10 bg-[#111c2e] text-gold' : 'border-transparent text-textMuted'}`}>
-                {roundLabel(bracket, roundNumber)}
-              </div>
-              <div className="space-y-3">
-                {roundMatches.length > 0 ? (
-                  roundMatches.map((match) => <BracketNode key={match.id} match={match} lastRound={lastRound} />)
-                ) : (
-                  <div className="rounded-xl border border-dashed border-white/10 px-3 py-4 text-xs text-textMuted">Awaiting results</div>
-                )}
-              </div>
+              <button 
+                onClick={() => toggleRound(roundNumber)}
+                className="mb-3 flex items-center justify-between rounded-xl border border-secondary bg-secondary px-4 py-3 text-left transition-all hover:border-gold/30"
+              >
+                <span className="text-xs font-black uppercase tracking-[0.28em] text-gold">
+                  {roundLabel(bracket, roundNumber)}
+                </span>
+                <span className="text-textMuted">{isCollapsed ? '▼' : '▲'}</span>
+              </button>
+              
+              {!isCollapsed && (
+                <div className="space-y-4">
+                  {roundMatches.length > 0 ? (
+                    roundMatches.map((match) => <BracketNode key={match.id} match={match} />)
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-secondary px-3 py-4 text-center text-xs text-textMuted">Awaiting results</div>
+                  )}
+                </div>
+              )}
             </section>
           );
         })}

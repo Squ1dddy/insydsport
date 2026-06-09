@@ -5,8 +5,8 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        primary: '#0B1320', // Dark Navy
-        secondary: '#142033', // Lighter Navy
+        primary: '#1A212E', // Softer Dark Gray
+        secondary: '#252D3D', // Lighter Gray-Navy
         gold: '#F5C400', // Accent
         textMuted: '#94A3B8', // Soft Gray
         eliminated: '#3A4A5C'

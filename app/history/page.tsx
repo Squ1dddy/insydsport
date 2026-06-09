@@ -118,20 +118,21 @@ function HistoryTeamCard({
 
   return (
     <div
-      className={`group relative rounded-2xl border px-4 py-4 transition-all duration-300 ${
-        isTie ? 'border-amber-400/60 bg-amber-400/10' : isAdvanced ? 'border-gold/60 bg-gold/10' : 'border-secondary bg-primary'
+      className={`group relative rounded-2xl border border-secondary bg-primary p-4 transition-all duration-300 ${
+        isAdvanced ? 'border-l-4 border-l-gold' : 'opacity-60 grayscale'
       }`}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className={`break-words text-sm font-black leading-tight ${isAdvanced ? 'text-gold' : isTie ? 'text-amber-200' : 'text-slate-100'}`}>{displayTeamName(team.name)}</p>
+          <p className={`break-words text-sm font-black leading-tight ${isAdvanced ? 'text-gold' : 'text-slate-100'}`}>{displayTeamName(team.name)}</p>
           <p className="mt-2 text-xs leading-5 text-textMuted">
             {team.player1} · {team.player2} · {team.year_group}
           </p>
+          <p className="mt-1 text-sm font-bold text-gold">Score: {score}</p>
         </div>
         <span
           className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-black uppercase tracking-[0.22em] ${
-            isTie ? 'border-amber-400/40 bg-amber-400/15 text-amber-200' : isAdvanced ? 'border-gold/40 bg-gold/15 text-gold' : 'border-secondary bg-primary text-textMuted'
+            isTie ? 'border-amber-400/40 bg-amber-400/15 text-amber-200' : isAdvanced ? 'border-emerald-400/40 bg-emerald-400/15 text-emerald-200' : 'border-secondary bg-primary text-textMuted'
           }`}
         >
           {isTie ? 'TIE' : isAdvanced ? 'ADVANCED' : 'ELIMINATED'}
@@ -140,6 +141,7 @@ function HistoryTeamCard({
     </div>
   );
 }
+
 
 function scoreForTeam(match: EnrichedMatch, teamId: string) {
   if (match.team1_id === teamId) return match.team1_score;
