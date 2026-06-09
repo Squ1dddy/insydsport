@@ -4,3 +4,4 @@ node_modules
 .DS_Store
 .git
 *.log
+**/node_modules/@next/swc-win32-x64-msvc/*.node
