@@ -206,3 +206,74 @@ export function teamBadgeClass(team?: Team | null, winnerIds: string[] = []) {
   if (team.status === 'eliminated') return 'text-eliminated';
   return 'text-white';
 }
+
+export interface DayWinnersBanner {
+  /** The scheduled_day number of the most-recently-completed senior day. */
+  day: number;
+  /** ISO string from getScheduledDate for display formatting. */
+  dateIso: string | null;
+  /** Unix ms of the earliest played_at in the day — the shared 24h clock anchor. */
+  anchorMs: number;
+  /** anchorMs + 24 hours — when both sets disappear together. */
+  expiresAtMs: number;
+  /** One entry per completed senior match in the day, sorted by match_number. */
+  entries: { match: EnrichedMatch; winners: Team[] }[];
+}
+
+/**
+ * Returns a DayWinnersBanner for the most-recently-completed senior day, or null
+ * when no qualifying matches exist or the 24h window has elapsed.
+ *
+ * "Winners of the day" = all senior completed matches on the latest played day.
+ * The clock is anchored to the FIRST result (min played_at), so both sets
+ * disappear together exactly 24h after the first match of the day finished.
+ *
+ * @param matches - EnrichedMatch[] from useTournament() (already has winner1/winner2 joined)
+ * @param nowMs   - override for unit-testing / forced expiry checks (defaults to Date.now())
+ */
+export function getSeniorDayWinners(
+  matches: EnrichedMatch[],
+  nowMs: number = Date.now()
+): DayWinnersBanner | null {
+  // Senior completed matches with a completion timestamp and at least one winner.
+  const candidates = matches.filter(
+    (m) =>
+      m.bracket === 'senior' &&
+      m.status === 'completed' &&
+      !m.is_next_term &&
+      m.played_at !== null &&
+      (m.winner1 || m.winner2)
+  );
+
+  if (candidates.length === 0) return null;
+
+  // The "most recent day" is determined by which day had the latest completion.
+  const latestMs = Math.max(...candidates.map((m) => new Date(m.played_at!).getTime()));
+  const latestMatch = candidates.find((m) => new Date(m.played_at!).getTime() === latestMs)!;
+  const day = latestMatch.scheduled_day;
+
+  // Gather all entries from that day.
+  const dayEntries = candidates.filter((m) => m.scheduled_day === day);
+
+  // Anchor: earliest played_at in the day (first result).
+  const anchorMs = Math.min(...dayEntries.map((m) => new Date(m.played_at!).getTime()));
+  const expiresAtMs = anchorMs + 24 * 60 * 60 * 1000;
+
+  // Expired — both sets vanish together.
+  if (nowMs >= expiresAtMs) return null;
+
+  const entries = dayEntries
+    .sort((a, b) => a.match_number - b.match_number)
+    .map((match) => ({
+      match,
+      winners: [match.winner1, match.winner2].filter((t): t is Team => Boolean(t))
+    }));
+
+  return {
+    day,
+    dateIso: getScheduledDate(day),
+    anchorMs,
+    expiresAtMs,
+    entries
+  };
+}

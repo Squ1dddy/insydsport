@@ -10,6 +10,7 @@ import type { BracketName } from '@/types/tournament';
 import { Skeleton } from '@/components/ui/skeleton';
 import { motion } from 'framer-motion';
 import { TypewriterTagline } from '@/components/typewriter-tagline';
+import { WinnersBanner } from '@/components/winners-banner';
 
 export default function HomePage() {
   const { data, loading, error } = useTournament();
@@ -60,6 +61,11 @@ export default function HomePage() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-10">
+      {/* Previous-day winners banner — stays for 24 h after the first senior result
+          of the day so anyone tuning in late can see who advanced. Accumulates as
+          each match on the day completes; both sets vanish together at the 24 h mark. */}
+      <WinnersBanner matches={data?.matches || []} />
+
       {/* Live scorebugs — broadcast strips pinned above the hero whenever a match
           is on, for BOTH brackets, independent of the senior/junior toggle below. */}
       {liveMatches.map((liveMatch) => {
