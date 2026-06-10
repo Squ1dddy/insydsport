@@ -39,7 +39,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         <TournamentProvider>
           <Navbar />
-          <main className="relative z-10 mx-auto min-h-screen w-full max-w-7xl px-5 py-7 md:px-8 lg:px-10">{children}</main>
+          <main className="relative z-10 mx-auto min-h-screen w-full max-w-7xl overflow-x-clip px-5 py-7 md:px-8 lg:px-10">{children}</main>
         </TournamentProvider>
       </body>
     </html>

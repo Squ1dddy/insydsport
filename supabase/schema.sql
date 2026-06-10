@@ -8,7 +8,12 @@ create table if not exists teams (
   skill_level int not null check (skill_level between 1 and 5),
   bracket text not null check (bracket in ('senior', 'junior')),
   year_group text not null,
-  status text not null default 'active' check (status in ('active', 'eliminated', 'bye'))
+  status text not null default 'active' check (status in ('active', 'eliminated', 'bye')),
+  -- Round-robin standings (junior bracket). Seniors keep these at 0.
+  points int not null default 0,
+  games_played int not null default 0,
+  -- Teacher teams: admin-only, hidden from public views, slot-able into any match.
+  is_teacher boolean not null default false
 );
 
 create table if not exists matches (
@@ -30,7 +35,10 @@ create table if not exists matches (
   winner2_id uuid references teams(id) on delete set null,
   is_skill_stretch boolean not null default false,
   played_at timestamptz,
-  duration_minutes int
+  duration_minutes int,
+  -- Year 11 plays next term: kept behind a "TBC Next Term" toggle, excluded from
+  -- the current schedule.
+  is_next_term boolean not null default false
 );
 
 create index if not exists matches_status_idx on matches(status);

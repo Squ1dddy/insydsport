@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useTournament } from '@/components/tournament-provider';
+import { AdminJuniorLadder } from '@/components/admin-junior-ladder';
 import type { BracketName, EnrichedMatch, Team } from '@/types/tournament';
 import {
   displayTeamName,
@@ -9,12 +10,13 @@ import {
   getMatchPlacements,
   matchLabel,
   matchTeamsLabel,
-  roundLabel
+  roundLabel,
+  yearGroupOf
 } from '@/lib/tournament-utils';
 import { motion } from 'framer-motion';
 
 const STORAGE_KEY = 'inner-sydney-admin-auth-password';
-type TabKey = 'live' | 'past' | 'teams';
+type TabKey = 'live' | 'past' | 'junior' | 'matches' | 'teams';
 type PlacementChoice = 'auto' | 'advanced' | 'eliminated';
 
 async function postAction(body: unknown) {
@@ -55,7 +57,8 @@ export default function AdminPage() {
     skill_level: 5,
     bracket: 'senior' as BracketName,
     year_group: 'Year 12, Week 1',
-    status: 'active' as Team['status']
+    status: 'active' as Team['status'],
+    is_teacher: false
   });
 
   useEffect(() => {
@@ -94,18 +97,29 @@ export default function AdminPage() {
 
   const teams = data?.teams || [];
   const matches = data?.matches || [];
+  const liveMatches = useMemo(() => matches.filter((match) => match.status === 'live').sort((a, b) => a.bracket.localeCompare(b.bracket) || a.match_number - b.match_number), [matches]);
   const upcomingMatches = useMemo(() => matches.filter((match) => match.status === 'upcoming').sort((a, b) => a.scheduled_day - b.scheduled_day || a.match_number - b.match_number), [matches]);
   const completedMatches = useMemo(() => matches.filter((match) => match.status === 'completed').sort((a, b) => Number(new Date(b.played_at || 0)) - Number(new Date(a.played_at || 0))), [matches]);
-  const selectedLiveMatch = upcomingMatches.find((match) => match.id === selectedLiveMatchId) || upcomingMatches[0] || null;
+  // The live tab can act on ANY match — live, upcoming, or already played — so the
+  // selection is resolved against the full match list. This is what keeps a match
+  // selected after Set Live flips its status to 'live' (it used to fall out of the
+  // upcoming-only list and the selection would snap to a different match).
+  const selectedLiveMatch = matches.find((match) => match.id === selectedLiveMatchId) || liveMatches[0] || upcomingMatches[0] || completedMatches[0] || null;
 
   useEffect(() => {
-    if (!selectedLiveMatchId && upcomingMatches[0]) {
-      setSelectedLiveMatchId(upcomingMatches[0].id);
+    // Only auto-pick a default when nothing valid is selected. Never override a
+    // selection that still points at a real match (preserves the live match after
+    // Set Live). Prefer a live match, then the next upcoming one, then any played
+    // game — that last fallback covers the end-of-tournament state where every
+    // match is completed, keeping the picker and selection in sync.
+    const stillValid = selectedLiveMatchId && matches.some((match) => match.id === selectedLiveMatchId);
+    if (!stillValid) {
+      const fallback = liveMatches[0]?.id || upcomingMatches[0]?.id || completedMatches[0]?.id || '';
+      if (fallback !== selectedLiveMatchId) {
+        setSelectedLiveMatchId(fallback);
+      }
     }
-    if (selectedLiveMatchId && !upcomingMatches.find((match) => match.id === selectedLiveMatchId)) {
-      setSelectedLiveMatchId(upcomingMatches[0]?.id || '');
-    }
-  }, [upcomingMatches, selectedLiveMatchId]);
+  }, [matches, liveMatches, upcomingMatches, completedMatches, selectedLiveMatchId]);
 
   async function login() {
     setLoginError('');
@@ -198,6 +212,8 @@ export default function AdminPage() {
             {[
               ['live', 'Live Scoring'],
               ['past', 'Past Games'],
+              ['junior', 'Junior Ladder'],
+              ['matches', 'Matches'],
               ['teams', 'Team Management']
             ].map(([key, label]) => (
               <button
@@ -224,7 +240,9 @@ export default function AdminPage() {
 
       {tab === 'live' ? (
         <LiveScoringTab
-          matches={upcomingMatches}
+          liveMatches={liveMatches}
+          upcomingMatches={upcomingMatches}
+          completedMatches={completedMatches}
           selectedMatch={selectedLiveMatch}
           selectedLiveMatchId={selectedLiveMatchId}
           setSelectedLiveMatchId={setSelectedLiveMatchId}
@@ -236,10 +254,13 @@ export default function AdminPage() {
 
       {tab === 'past' ? <PastGamesTab matches={completedMatches} expandedMatchIds={expandedMatchIds} setExpandedMatchIds={setExpandedMatchIds} onRefresh={refresh} /> : null}
 
+      {tab === 'junior' ? <AdminJuniorLadder teams={teams} onAction={postAction} onRefresh={refresh} /> : null}
+
+      {tab === 'matches' ? <MatchesTab matches={matches} teams={teams} onRefresh={refresh} /> : null}
+
       {tab === 'teams' ? (
         <TeamManagementTab
           teams={teams}
-          matches={matches}
           newTeam={newTeam}
           setNewTeam={setNewTeam}
           onRefresh={refresh}
@@ -252,7 +273,9 @@ export default function AdminPage() {
 }
 
 function LiveScoringTab({
-  matches,
+  liveMatches,
+  upcomingMatches,
+  completedMatches,
   selectedMatch,
   selectedLiveMatchId,
   setSelectedLiveMatchId,
@@ -260,7 +283,9 @@ function LiveScoringTab({
   setSelectedWinners,
   onRefresh
 }: {
-  matches: EnrichedMatch[];
+  liveMatches: EnrichedMatch[];
+  upcomingMatches: EnrichedMatch[];
+  completedMatches: EnrichedMatch[];
   selectedMatch: EnrichedMatch | null;
   selectedLiveMatchId: string;
   setSelectedLiveMatchId: (id: string) => void;
@@ -291,6 +316,12 @@ function LiveScoringTab({
   async function setLive() {
     if (!selectedMatch) return;
     await postAction({ action: 'set-live', matchId: selectedMatch.id });
+    await onRefresh();
+  }
+
+  async function stopLive() {
+    if (!selectedMatch) return;
+    await postAction({ action: 'stop-live', matchId: selectedMatch.id });
     await onRefresh();
   }
 
@@ -339,7 +370,7 @@ function LiveScoringTab({
       <div className="rounded-[2rem] border border-secondary bg-primary p-4 shadow-card">
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex-1 min-w-[280px] space-y-2 text-sm font-bold text-textMuted">
-            <span className="block uppercase tracking-[0.28em]">Select upcoming match</span>
+            <span className="block uppercase tracking-[0.28em]">Select match</span>
             <select
               value={selectedLiveMatchId}
               onChange={(event) => {
@@ -348,35 +379,75 @@ function LiveScoringTab({
               }}
               className="w-full rounded-2xl border border-secondary bg-primary px-4 py-3 text-slate-100 outline-none focus:border-gold"
             >
-              <optgroup label="Seniors" className="bg-primary text-gold">
-                {matches
-                  .filter((m) => m.bracket === 'senior')
-                  .map((match) => (
+              {liveMatches.length > 0 ? (
+                <optgroup label="🔴 Live Now" className="bg-primary text-red-300">
+                  {liveMatches.map((match) => (
                     <option key={match.id} value={match.id} className="text-slate-100">
-                      {matchLabel(match)} — {matchTeamsLabel(match)}
+                      {match.bracket === 'senior' ? 'SR' : 'JR'} · {matchLabel(match)} — {matchTeamsLabel(match)}
                     </option>
                   ))}
-              </optgroup>
-              <optgroup label="Juniors" className="bg-primary text-gold">
-                {matches
-                  .filter((m) => m.bracket === 'junior')
-                  .map((match) => (
-                    <option key={match.id} value={match.id} className="text-slate-100">
-                      {matchLabel(match)} — {matchTeamsLabel(match)}
-                    </option>
-                  ))}
-              </optgroup>
+                </optgroup>
+              ) : null}
+
+              {([
+                ['Upcoming · Seniors', 'senior', upcomingMatches, 'text-gold'],
+                ['Upcoming · Juniors', 'junior', upcomingMatches, 'text-gold'],
+                ['Previous Games · Seniors', 'senior', completedMatches, 'text-ash'],
+                ['Previous Games · Juniors', 'junior', completedMatches, 'text-ash']
+              ] as const).map(([label, bracket, source, labelClass]) => {
+                const group = source.filter((m) => m.bracket === bracket);
+                if (group.length === 0) return null;
+                return (
+                  <optgroup key={label} label={label} className={`bg-primary ${labelClass}`}>
+                    {group.map((match) => (
+                      <option key={match.id} value={match.id} className="text-slate-100">
+                        {matchLabel(match)} — {matchTeamsLabel(match)}
+                      </option>
+                    ))}
+                  </optgroup>
+                );
+              })}
             </select>
           </label>
-          <button
-            type="button"
-            onClick={setLive}
-            disabled={!selectedMatch}
-            className="rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-red-200 transition-all duration-200 hover:scale-105 disabled:opacity-40"
-          >
-            Set Live
-          </button>
+          {selectedMatch?.status === 'live' ? (
+            <button
+              type="button"
+              onClick={stopLive}
+              className="rounded-2xl border border-amber-400/50 bg-amber-400/10 px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-amber-200 transition-all duration-200 hover:scale-105"
+            >
+              Stop Live
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={setLive}
+              disabled={!selectedMatch}
+              className="rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-red-200 transition-all duration-200 hover:scale-105 disabled:opacity-40"
+            >
+              Set Live
+            </button>
+          )}
         </div>
+        {selectedMatch ? (
+          <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.22em] text-textMuted">
+            Selected: {matchLabel(selectedMatch)} ·{' '}
+            <span
+              className={
+                selectedMatch.status === 'live'
+                  ? 'text-red-300'
+                  : selectedMatch.status === 'completed'
+                  ? 'text-emerald-300'
+                  : 'text-gold'
+              }
+            >
+              {selectedMatch.status === 'live'
+                ? 'ON AIR'
+                : selectedMatch.status === 'completed'
+                ? 'COMPLETED — editing score will not re-air it'
+                : 'UPCOMING'}
+            </span>
+          </p>
+        ) : null}
       </div>
 
       {selectedMatch ? (
@@ -436,7 +507,7 @@ function LiveScoringTab({
           </button>
         </>
       ) : (
-        <div className="rounded-3xl border border-dashed border-secondary bg-primary px-4 py-10 text-center text-textMuted">No upcoming matches available.</div>
+        <div className="rounded-3xl border border-dashed border-secondary bg-primary px-4 py-10 text-center text-textMuted">No matches available to score yet.</div>
       )}
     </section>
   );
@@ -649,9 +720,189 @@ function PastGameEditor({
   );
 }
 
+function MatchesTab({ matches, teams, onRefresh }: { matches: EnrichedMatch[]; teams: Team[]; onRefresh: () => Promise<unknown> }) {
+  // Show all upcoming matches; current-term first, then Year 11 (next term).
+  const upcomingMatches = matches
+    .filter((match) => match.status === 'upcoming')
+    .sort((a, b) => Number(a.is_next_term) - Number(b.is_next_term) || a.scheduled_day - b.scheduled_day || a.match_number - b.match_number);
+
+  return (
+    <div className="space-y-6">
+      <CreateMatchForm matches={matches} teams={teams} onRefresh={onRefresh} />
+
+      <section className="rounded-[2rem] border border-line bg-surface/80 p-5 shadow-card">
+        <h2 className="font-display text-2xl uppercase tracking-wide text-bone">Upcoming Matches</h2>
+        <p className="mt-1 text-sm text-textMuted">Reassign teams or reschedule. Year 11 (TBC next term) matches are listed here too.</p>
+        <div className="mt-4 space-y-3">
+          {upcomingMatches.map((match) => (
+            <UpcomingMatchEditor key={match.id} match={match} teams={teams} onRefresh={onRefresh} />
+          ))}
+          {upcomingMatches.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-secondary bg-primary px-4 py-8 text-center text-textMuted">No upcoming matches.</div>
+          ) : null}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function CreateMatchForm({ matches, teams, onRefresh }: { matches: EnrichedMatch[]; teams: Team[]; onRefresh: () => Promise<unknown> }) {
+  const [scheduledDay, setScheduledDay] = useState(1);
+  const [round, setRound] = useState(1);
+  const [isNextTerm, setIsNextTerm] = useState(false);
+  const [isSkillStretch, setIsSkillStretch] = useState(false);
+  const [slots, setSlots] = useState<string[]>(['', '', '', '']);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  // A senior match accepts any senior team plus any teacher team (teacher teams can
+  // play in either bracket). Grouped by year for the dropdowns.
+  const groupOrder = ['Year 12', 'Year 11', 'Teachers'];
+  const grouped = new Map<string, Team[]>();
+  for (const team of teams) {
+    if (team.bracket !== 'senior' && !team.is_teacher) continue;
+    const key = yearGroupOf(team);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)!.push(team);
+  }
+  const groups = [...grouped.entries()].sort(([a], [b]) => {
+    const ia = groupOrder.indexOf(a);
+    const ib = groupOrder.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.localeCompare(b);
+  });
+
+  function setSlot(index: number, value: string) {
+    setSlots((prev) => prev.map((current, i) => (i === index ? value : current)));
+  }
+
+  async function create() {
+    setError(null);
+    if (!slots[0] || !slots[1]) {
+      setError('Pick at least the first two teams.');
+      return;
+    }
+    const ids = slots.filter(Boolean);
+    if (new Set(ids).size !== ids.length) {
+      setError('A team can only appear once in a match.');
+      return;
+    }
+
+    // Auto-assign a non-colliding match number. Next-term matches live in the 100+
+    // band so they never clash with the current-term Year 12 fixtures.
+    const base = isNextTerm ? 100 : 0;
+    const matchNumber =
+      matches
+        .filter((match) => match.bracket === 'senior' && match.round === round && match.is_next_term === isNextTerm)
+        .reduce((max, match) => Math.max(max, match.match_number), base) + 1;
+
+    setBusy(true);
+    try {
+      await postAction({
+        action: 'create-match',
+        payload: {
+          bracket: 'senior',
+          round,
+          match_number: matchNumber,
+          scheduled_day: isNextTerm ? 6 : scheduledDay,
+          team1_id: slots[0],
+          team2_id: slots[1],
+          team3_id: slots[2] || null,
+          team4_id: slots[3] || null,
+          status: 'upcoming',
+          is_skill_stretch: isSkillStretch,
+          is_next_term: isNextTerm
+        }
+      });
+      setSlots(['', '', '', '']);
+      setIsSkillStretch(false);
+      await onRefresh();
+    } catch {
+      setError('Could not create the match. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="rounded-[2rem] border border-line bg-surface/80 p-5 shadow-card">
+      <h2 className="font-display text-2xl uppercase tracking-wide text-bone">Create New Match</h2>
+      <p className="mt-1 text-sm text-textMuted">Senior knockout match — pick any senior or teacher teams (4 max, top 2 advance). Teams 3 &amp; 4 are optional.</p>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {[0, 1, 2, 3].map((index) => (
+          <label key={index} className="text-xs font-bold uppercase tracking-[0.18em] text-textMuted">
+            {`Team ${index + 1}${index < 2 ? ' (required)' : ' (optional)'}`}
+            <select
+              value={slots[index]}
+              onChange={(event) => setSlot(index, event.target.value)}
+              className="mt-1 block w-full rounded-xl border border-secondary bg-primary px-3 py-2 text-sm text-slate-100 outline-none focus:border-gold"
+            >
+              <option value="">—</option>
+              {groups.map(([group, groupTeams]) => (
+                <optgroup key={group} label={group} className="bg-primary text-gold">
+                  {groupTeams.map((team) => (
+                    <option key={team.id} value={team.id} className="text-slate-100">
+                      {displayTeamName(team.name)}
+                      {team.is_teacher ? ' · Teacher' : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </label>
+        ))}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-end gap-4">
+        <label className="text-xs font-bold uppercase tracking-[0.18em] text-textMuted">
+          Round
+          <input
+            type="number"
+            min={1}
+            max={5}
+            value={round}
+            onChange={(event) => setRound(Math.max(1, Number(event.target.value)))}
+            className="mt-1 block w-24 rounded-xl border border-secondary bg-primary px-3 py-2 text-sm text-slate-100"
+          />
+        </label>
+        {!isNextTerm ? (
+          <label className="text-xs font-bold uppercase tracking-[0.18em] text-textMuted">
+            Scheduled day
+            <input
+              type="number"
+              min={1}
+              value={scheduledDay}
+              onChange={(event) => setScheduledDay(Math.max(1, Number(event.target.value)))}
+              className="mt-1 block w-24 rounded-xl border border-secondary bg-primary px-3 py-2 text-sm text-slate-100"
+            />
+          </label>
+        ) : null}
+        <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-textMuted">
+          <input type="checkbox" checked={isSkillStretch} onChange={(event) => setIsSkillStretch(event.target.checked)} className="h-4 w-4 accent-gold" />
+          Skill stretch
+        </label>
+        <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-textMuted">
+          <input type="checkbox" checked={isNextTerm} onChange={(event) => setIsNextTerm(event.target.checked)} className="h-4 w-4 accent-gold" />
+          TBC next term (Year 11)
+        </label>
+      </div>
+
+      {error ? <p className="mt-3 text-sm font-bold text-flare">{error}</p> : null}
+
+      <button
+        type="button"
+        onClick={create}
+        disabled={busy}
+        className="mt-4 rounded-2xl bg-volt px-6 py-3 text-sm font-black uppercase tracking-[0.22em] text-ink transition-all duration-200 hover:shadow-volt disabled:opacity-40"
+      >
+        Create Match
+      </button>
+    </section>
+  );
+}
+
 function TeamManagementTab({
   teams,
-  matches,
   newTeam,
   setNewTeam,
   onRefresh,
@@ -659,7 +910,6 @@ function TeamManagementTab({
   onClearScores
 }: {
   teams: Team[];
-  matches: EnrichedMatch[];
   newTeam: {
     name: string;
     player1: string;
@@ -668,15 +918,26 @@ function TeamManagementTab({
     bracket: BracketName;
     year_group: string;
     status: Team['status'];
+    is_teacher: boolean;
   };
   setNewTeam: (value: any) => void;
   onRefresh: () => Promise<unknown>;
   onReset: () => Promise<void>;
   onClearScores: () => Promise<void>;
 }) {
-  const upcomingMatches = matches.filter((match) => match.status === 'upcoming').sort((a, b) => a.scheduled_day - b.scheduled_day || a.match_number - b.match_number);
-  const seniors = teams.filter((team) => team.bracket === 'senior');
-  const juniors = teams.filter((team) => team.bracket === 'junior');
+  // Group teams by year group (Teachers bucket last) so each cohort is easy to find.
+  const groupOrder = ['Year 12', 'Year 11', 'Year 10', 'Year 9', 'Year 8', 'Year 7', 'Year 7-10', 'Teachers'];
+  const grouped = new Map<string, Team[]>();
+  for (const team of teams) {
+    const key = yearGroupOf(team);
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key)!.push(team);
+  }
+  const sortedGroups = [...grouped.entries()].sort(([a], [b]) => {
+    const ia = groupOrder.indexOf(a);
+    const ib = groupOrder.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.localeCompare(b);
+  });
 
   return (
     <div className="space-y-6">
@@ -686,21 +947,12 @@ function TeamManagementTab({
           <TeamCreateForm newTeam={newTeam} setNewTeam={setNewTeam} onRefresh={onRefresh} />
           <div className="rounded-2xl border border-secondary bg-primary p-4">
             <p className="text-sm font-black uppercase tracking-[0.24em] text-gold">Quick notes</p>
-            <p className="mt-2 text-sm text-textMuted">Edit, add, or delete teams from the lists below. Team names render uppercase throughout the site.</p>
+            <p className="mt-2 text-sm text-textMuted">Teams are grouped by year. Teacher teams sit in their own group — they stay hidden from public pages and are never auto-queued, but you can slot them into any match from the Live or Match editors.</p>
           </div>
         </div>
-        <TeamList title="Seniors" teams={seniors} onRefresh={onRefresh} />
-        <TeamList title="Juniors" teams={juniors} onRefresh={onRefresh} />
-      </section>
-
-      <section className="rounded-[2rem] border border-line bg-surface/80 p-5 shadow-card">
-        <h2 className="font-display text-2xl uppercase tracking-wide text-bone">Upcoming Matches</h2>
-        <div className="mt-4 space-y-3">
-          {upcomingMatches.map((match) => (
-            <UpcomingMatchEditor key={match.id} match={match} teams={teams} onRefresh={onRefresh} />
-          ))}
-          {upcomingMatches.length === 0 ? <div className="rounded-2xl border border-dashed border-secondary bg-primary px-4 py-8 text-center text-textMuted">No upcoming matches.</div> : null}
-        </div>
+        {sortedGroups.map(([group, groupTeams]) => (
+          <TeamList key={group} title={`${group} (${groupTeams.length})`} teams={groupTeams} onRefresh={onRefresh} />
+        ))}
       </section>
 
       <section className="rounded-[2rem] border border-flare/25 bg-flare/[0.04] p-5 shadow-card">
@@ -736,13 +988,14 @@ function TeamCreateForm({
     bracket: BracketName;
     year_group: string;
     status: Team['status'];
+    is_teacher: boolean;
   };
   setNewTeam: (value: any) => void;
   onRefresh: () => Promise<unknown>;
 }) {
   async function save() {
     await postAction({ action: 'create-team', payload: newTeam });
-    setNewTeam({ name: '', player1: '', player2: '', skill_level: 5, bracket: 'senior', year_group: 'Year 12, Week 1', status: 'active' });
+    setNewTeam({ name: '', player1: '', player2: '', skill_level: 5, bracket: 'senior', year_group: 'Year 12, Week 1', status: 'active', is_teacher: false });
     await onRefresh();
   }
 
@@ -777,6 +1030,15 @@ function TeamCreateForm({
             <option value="junior">Junior</option>
           </select>
         </div>
+        <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-textMuted">
+          <input
+            type="checkbox"
+            checked={newTeam.is_teacher}
+            onChange={(event) => setNewTeam((current: any) => ({ ...current, is_teacher: event.target.checked }))}
+            className="h-4 w-4 accent-gold"
+          />
+          Teacher team (hidden from public, slot-able into any match)
+        </label>
       </div>
       <button type="button" onClick={save} className="mt-3 rounded-2xl bg-gold px-4 py-3 text-sm font-black uppercase tracking-[0.22em] text-primary transition-all duration-200 hover:scale-105">
         Create Team
@@ -811,7 +1073,8 @@ function TeamRowEditor({ team, onRefresh }: { team: Team; onRefresh: () => Promi
         player1: draft.player1,
         player2: draft.player2,
         skill_level: draft.skill_level,
-        status: draft.status
+        status: draft.status,
+        is_teacher: draft.is_teacher
       }
     });
     setEditing(false);
@@ -829,7 +1092,10 @@ function TeamRowEditor({ team, onRefresh }: { team: Team; onRefresh: () => Promi
     <div className="rounded-2xl border border-secondary bg-primary p-4 transition-all duration-300 hover:border-gold/30">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="font-black text-slate-100">{displayTeamName(team.name)}</p>
+          <p className="font-black text-slate-100">
+            {displayTeamName(team.name)}
+            {team.is_teacher ? <span className="ml-2 rounded-full border border-gold/40 bg-gold/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.2em] text-gold">Teacher</span> : null}
+          </p>
           <p className="text-xs text-textMuted">
             {team.player1} · {team.player2} · Skill {team.skill_level} · {team.bracket} · {team.status}
           </p>
@@ -860,7 +1126,15 @@ function TeamRowEditor({ team, onRefresh }: { team: Team; onRefresh: () => Promi
               </option>
             ))}
           </select>
-          <div />
+          <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-textMuted">
+            <input
+              type="checkbox"
+              checked={draft.is_teacher}
+              onChange={(event) => setDraft((current) => ({ ...current, is_teacher: event.target.checked }))}
+              className="h-4 w-4 accent-gold"
+            />
+            Teacher team
+          </label>
           <button type="button" onClick={save} className="rounded-xl bg-gold px-4 py-3 text-sm font-black uppercase tracking-[0.22em] text-primary transition-all duration-200 hover:scale-105">
             Save
           </button>

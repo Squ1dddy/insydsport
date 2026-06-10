@@ -11,6 +11,13 @@ export interface Team {
   bracket: BracketName;
   year_group: string;
   status: TeamStatus;
+  // Round-robin standings (junior bracket). Seniors keep these at 0 — they run a
+  // knockout and rank by match winners, not a points ladder.
+  points: number;
+  games_played: number;
+  // Teacher teams are admin-only: hidden from every public view and never
+  // auto-queued, but can be slotted into any junior or senior match by an admin.
+  is_teacher: boolean;
 }
 
 export interface Match {
@@ -33,6 +40,9 @@ export interface Match {
   is_skill_stretch: boolean;
   played_at: string | null;
   duration_minutes: number | null;
+  // Year 11 plays next term — these matches are kept behind a "TBC Next Term"
+  // toggle and excluded from the current schedule / This Week views.
+  is_next_term: boolean;
 }
 
 export interface EnrichedMatch extends Match {

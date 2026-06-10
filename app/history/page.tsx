@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useTournament } from '@/components/tournament-provider';
+import { JuniorStandings } from '@/components/junior-standings';
 import type { BracketName, EnrichedMatch, Team } from '@/types/tournament';
 import { displayTeamName, formatAestDateTime, getMatchPlacements, matchLabel } from '@/lib/tournament-utils';
 import { motion } from 'framer-motion';
@@ -63,15 +64,20 @@ export default function HistoryPage() {
         ) : null}
       </div>
 
-      <div className="space-y-4">
-        {matches.length > 0 ? (
-          matches.map((match) => <HistoryRow key={match.id} match={match} />)
-        ) : (
-          <div className="rounded-3xl border border-dashed border-line bg-surface/40 px-4 py-12 text-center font-mono text-xs uppercase tracking-[0.2em] text-ash">
-            No completed matches yet.
-          </div>
-        )}
-      </div>
+      {filter === 'junior' ? (
+        /* Juniors are a round-robin — their "results" are the points ladder, not knockout matches. */
+        <JuniorStandings teams={data?.teams || []} />
+      ) : (
+        <div className="space-y-4">
+          {matches.length > 0 ? (
+            matches.map((match) => <HistoryRow key={match.id} match={match} />)
+          ) : (
+            <div className="rounded-3xl border border-dashed border-line bg-surface/40 px-4 py-12 text-center font-mono text-xs uppercase tracking-[0.2em] text-ash">
+              No completed matches yet.
+            </div>
+          )}
+        </div>
+      )}
     </motion.div>
   );
 }

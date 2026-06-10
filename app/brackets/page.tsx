@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import { BracketTree } from '@/components/bracket-tree';
+import { JuniorStandings } from '@/components/junior-standings';
+import { NextTermSection } from '@/components/next-term-section';
 import { useTournament } from '@/components/tournament-provider';
 import type { BracketName } from '@/types/tournament';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -12,8 +14,14 @@ export default function BracketsPage() {
   const [bracket, setBracket] = useState<BracketName>('senior');
   const [activeRound, setActiveRound] = useState(1);
 
-  const matches = useMemo(() => data?.matches.filter((match) => match.bracket === bracket) || [], [data, bracket]);
-  const totalRounds = bracket === 'senior' ? 5 : 4;
+  const allBracketMatches = useMemo(() => data?.matches.filter((match) => match.bracket === bracket) || [], [data, bracket]);
+  // The bracket tree shows the current-term knockout only; Year 11 (next term) is
+  // split into its own collapsible section so it doesn't mix into the Year 12 tree.
+  const matches = useMemo(() => allBracketMatches.filter((match) => !match.is_next_term), [allBracketMatches]);
+  const nextTermMatches = useMemo(() => allBracketMatches.filter((match) => match.is_next_term).sort((a, b) => a.match_number - b.match_number), [allBracketMatches]);
+  const teams = data?.teams || [];
+  const isJunior = bracket === 'junior';
+  const totalRounds = 5;
 
   if (loading) {
     return (
@@ -31,8 +39,8 @@ export default function BracketsPage() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full w-full space-y-7">
       <div className="border-b border-line pb-2">
-        <p className="eyebrow text-volt">The Road To The Final</p>
-        <h1 className="mt-1 font-display text-4xl uppercase tracking-wide text-bone lg:text-5xl">Brackets</h1>
+        <p className="eyebrow text-volt">{isJunior ? 'Round Robin Ladder' : 'The Road To The Final'}</p>
+        <h1 className="mt-1 font-display text-4xl uppercase tracking-wide text-bone lg:text-5xl">{isJunior ? 'Standings' : 'Brackets'}</h1>
       </div>
 
       <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
@@ -54,25 +62,34 @@ export default function BracketsPage() {
           ))}
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          {Array.from({ length: totalRounds }, (_, i) => i + 1).map((round) => (
-            <button
-              key={round}
-              onClick={() => setActiveRound(round)}
-              className={`whitespace-nowrap rounded-full border px-4 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] transition-all duration-200 ${
-                activeRound === round
-                  ? 'border-volt bg-volt/15 text-volt'
-                  : 'border-line bg-surface text-ash hover:border-volt/30 hover:text-bone'
-              }`}
-            >
-              Round {round}
-            </button>
-          ))}
-        </div>
+        {!isJunior ? (
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            {Array.from({ length: totalRounds }, (_, i) => i + 1).map((round) => (
+              <button
+                key={round}
+                onClick={() => setActiveRound(round)}
+                className={`whitespace-nowrap rounded-full border px-4 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] transition-all duration-200 ${
+                  activeRound === round
+                    ? 'border-volt bg-volt/15 text-volt'
+                    : 'border-line bg-surface text-ash hover:border-volt/30 hover:text-bone'
+                }`}
+              >
+                Round {round}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
 
-      <div className="w-full">
-        <BracketTree matches={matches} bracket={bracket} highlightRound={activeRound} />
+      <div className="w-full space-y-7">
+        {isJunior ? (
+          <JuniorStandings teams={teams} />
+        ) : (
+          <>
+            <BracketTree matches={matches} bracket={bracket} highlightRound={activeRound} />
+            <NextTermSection matches={nextTermMatches} />
+          </>
+        )}
       </div>
     </motion.div>
   );

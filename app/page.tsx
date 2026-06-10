@@ -3,6 +3,8 @@
 import { useMemo, useState } from 'react';
 import { useTournament } from '@/components/tournament-provider';
 import { MatchCard } from '@/components/match-card';
+import { JuniorStandings } from '@/components/junior-standings';
+import { NextTermSection } from '@/components/next-term-section';
 import { displayTeamName, formatAestDate, matchTeamsLabel, getScheduledDate, matchLabel } from '@/lib/tournament-utils';
 import type { BracketName } from '@/types/tournament';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -14,7 +16,8 @@ export default function HomePage() {
   const [activeBracket, setActiveBracket] = useState<BracketName>('senior');
 
   const { todayMatches, upcomingMatches, currentDay, currentDayDate } = useMemo(() => {
-    const matches = (data?.matches || []).filter((m) => m.bracket === activeBracket);
+    // Exclude Year 11 (next term) from the current schedule — it has its own toggle.
+    const matches = (data?.matches || []).filter((m) => m.bracket === activeBracket && !m.is_next_term);
     const activeDayMatch = matches.find((m) => m.status !== 'completed');
     const day = activeDayMatch?.scheduled_day ?? 1;
 
@@ -25,7 +28,21 @@ export default function HomePage() {
       upcomingMatches: matches.filter((match) => match.scheduled_day > day).sort((a, b) => a.scheduled_day - b.scheduled_day)
     };
   }, [data, activeBracket]);
-  const liveMatch = data?.matches.find((match) => match.status === 'live' && match.bracket === activeBracket) || null;
+  // Live scorebugs are always visible regardless of the senior/junior toggle —
+  // a live match must never be hidden just because the viewer is filtered to the
+  // other bracket. Show every match that is currently on air.
+  const liveMatches = useMemo(
+    () =>
+      (data?.matches || [])
+        .filter((match) => match.status === 'live')
+        .sort((a, b) => a.bracket.localeCompare(b.bracket) || a.match_number - b.match_number),
+    [data]
+  );
+  // Year 11 next-term matches (senior bracket), shown behind a collapsed toggle.
+  const nextTermMatches = useMemo(
+    () => (data?.matches || []).filter((match) => match.is_next_term).sort((a, b) => a.match_number - b.match_number),
+    [data]
+  );
 
   if (loading) {
     return (
@@ -43,9 +60,11 @@ export default function HomePage() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-10">
-      {/* Live scorebug — broadcast strip pinned above the hero when a match is on. */}
-      {liveMatch ? (
+      {/* Live scorebugs — broadcast strips pinned above the hero whenever a match
+          is on, for BOTH brackets, independent of the senior/junior toggle below. */}
+      {liveMatches.map((liveMatch) => (
         <motion.section
+          key={liveMatch.id}
           initial={{ scale: 0.97, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           className="relative overflow-hidden rounded-3xl border border-flare/50 bg-surface p-5 shadow-flare animate-livePulse lg:p-6"
@@ -58,7 +77,7 @@ export default function HomePage() {
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-flare opacity-75" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-flare" />
                 </span>
-                On Air Now
+                On Air Now · {liveMatch.bracket}s
               </span>
               <h2 className="mt-3 font-display text-3xl uppercase leading-none tracking-wide text-bone lg:text-5xl">Live Match</h2>
               <p className="mt-2 font-mono text-xs uppercase tracking-[0.2em] text-ash">{matchTeamsLabel(liveMatch)}</p>
@@ -81,7 +100,7 @@ export default function HomePage() {
             </div>
           </div>
         </motion.section>
-      ) : null}
+      ))}
 
       {/* Hero */}
       <section className="relative overflow-hidden rounded-[2rem] border border-line bg-surface/80 p-6 shadow-card lg:p-12">
@@ -125,63 +144,81 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* This week */}
-      <section className="space-y-5">
-        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-line pb-4">
-          <div className="flex items-baseline gap-4">
-            <span className="font-display text-5xl leading-none text-volt/30">{String(currentDay).padStart(2, '0')}</span>
+      {activeBracket === 'junior' ? (
+        /* Juniors run a round-robin — show the points ladder instead of a knockout schedule. */
+        <section className="space-y-5">
+          <div className="flex flex-wrap items-end justify-between gap-3 border-b border-line pb-4">
             <div>
-              <p className="eyebrow text-volt">This Week</p>
-              <h2 className="mt-1 font-display text-2xl uppercase tracking-wide text-bone">Day {currentDay}</h2>
+              <p className="eyebrow text-volt">Round Robin</p>
+              <h2 className="mt-1 font-display text-2xl uppercase tracking-wide text-bone">Junior Ladder</h2>
             </div>
+            <p className="font-mono text-xs uppercase tracking-[0.18em] text-ash">Ranked by points</p>
           </div>
-          <p className="font-mono text-xs uppercase tracking-[0.18em] text-ash">{formatAestDate(currentDayDate || new Date().toISOString())}</p>
-        </div>
-        <div className="grid gap-4">
-          {todayMatches.length > 0 ? (
-            todayMatches.map((match) => <MatchCard key={match.id} match={match} />)
-          ) : (
-            <div className="rounded-2xl border border-dashed border-line bg-surface/50 px-4 py-10 text-center font-mono text-xs uppercase tracking-[0.18em] text-ash">
-              No matches scheduled for {activeBracket}s this week.
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Upcoming */}
-      <section className="space-y-5">
-        <div className="border-b border-line pb-4">
-          <p className="eyebrow text-volt">On The Horizon</p>
-          <h2 className="mt-1 font-display text-2xl uppercase tracking-wide text-bone">Upcoming Matches</h2>
-        </div>
-        <div className="grid gap-3">
-          {upcomingMatches.length > 0 ? (
-            upcomingMatches.map((match) => (
-              <div
-                key={match.id}
-                className="group flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface/60 px-5 py-4 transition-colors duration-200 hover:border-volt/30 hover:bg-surface"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-bone">
-                    {[match.team1, match.team2, match.team3, match.team4]
-                      .filter(Boolean)
-                      .map((team) => displayTeamName(team!.name))
-                      .join('  ·  ')}
-                  </p>
-                  <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.2em] text-ash">{matchLabel(match)}</p>
+          <JuniorStandings teams={data?.teams || []} />
+        </section>
+      ) : (
+        <>
+          {/* This week */}
+          <section className="space-y-5">
+            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-line pb-4">
+              <div className="flex items-baseline gap-4">
+                <span className="font-display text-5xl leading-none text-volt/30">{String(currentDay).padStart(2, '0')}</span>
+                <div>
+                  <p className="eyebrow text-volt">This Week</p>
+                  <h2 className="mt-1 font-display text-2xl uppercase tracking-wide text-bone">Day {currentDay}</h2>
                 </div>
-                <span className="shrink-0 rounded-full border border-line bg-ink/60 px-3 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.24em] text-ash">
-                  Upcoming
-                </span>
               </div>
-            ))
-          ) : (
-            <div className="rounded-2xl border border-dashed border-line bg-surface/50 px-4 py-8 text-center font-mono text-xs uppercase tracking-[0.18em] text-ash">
-              No future {activeBracket} matches scheduled yet.
+              <p className="font-mono text-xs uppercase tracking-[0.18em] text-ash">{formatAestDate(currentDayDate || new Date().toISOString())}</p>
             </div>
-          )}
-        </div>
-      </section>
+            <div className="grid gap-4">
+              {todayMatches.length > 0 ? (
+                todayMatches.map((match) => <MatchCard key={match.id} match={match} />)
+              ) : (
+                <div className="rounded-2xl border border-dashed border-line bg-surface/50 px-4 py-10 text-center font-mono text-xs uppercase tracking-[0.18em] text-ash">
+                  No matches scheduled for {activeBracket}s this week.
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Upcoming */}
+          <section className="space-y-5">
+            <div className="border-b border-line pb-4">
+              <p className="eyebrow text-volt">On The Horizon</p>
+              <h2 className="mt-1 font-display text-2xl uppercase tracking-wide text-bone">Upcoming Matches</h2>
+            </div>
+            <div className="grid gap-3">
+              {upcomingMatches.length > 0 ? (
+                upcomingMatches.map((match) => (
+                  <div
+                    key={match.id}
+                    className="group flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface/60 px-5 py-4 transition-colors duration-200 hover:border-volt/30 hover:bg-surface"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold text-bone">
+                        {[match.team1, match.team2, match.team3, match.team4]
+                          .filter(Boolean)
+                          .map((team) => displayTeamName(team!.name))
+                          .join('  ·  ')}
+                      </p>
+                      <p className="mt-1 truncate font-mono text-[10px] uppercase tracking-[0.2em] text-ash">{matchLabel(match)}</p>
+                    </div>
+                    <span className="shrink-0 rounded-full border border-line bg-ink/60 px-3 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.24em] text-ash">
+                      Upcoming
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-2xl border border-dashed border-line bg-surface/50 px-4 py-8 text-center font-mono text-xs uppercase tracking-[0.18em] text-ash">
+                  No future {activeBracket} matches scheduled yet.
+                </div>
+              )}
+            </div>
+          </section>
+
+          <NextTermSection matches={nextTermMatches} />
+        </>
+      )}
     </motion.div>
   );
 }

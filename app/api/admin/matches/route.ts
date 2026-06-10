@@ -5,6 +5,7 @@ import { verifyAdminPassword } from '@/lib/admin-auth';
 
 type ActionBody =
   | { action: 'set-live'; matchId: string }
+  | { action: 'stop-live'; matchId: string }
   | { action: 'increment'; matchId: string; slot: 1 | 2 | 3 | 4 }
   | { action: 'undo'; matchId: string; slot: 1 | 2 | 3 | 4 }
   | { action: 'complete'; matchId: string; winnerIds?: string[] }
@@ -33,11 +34,13 @@ type ActionBody =
   | {
       action: 'update-team';
       teamId: string;
-      payload: Partial<Pick<Team, 'name' | 'player1' | 'player2' | 'skill_level' | 'status'>>;
+      payload: Partial<Pick<Team, 'name' | 'player1' | 'player2' | 'skill_level' | 'status' | 'points' | 'games_played' | 'is_teacher'>>;
     }
+  | { action: 'adjust-standings'; teamId: string; pointsDelta: number; gamesDelta: number }
   | {
       action: 'create-team';
-      payload: Pick<Team, 'name' | 'player1' | 'player2' | 'skill_level' | 'bracket' | 'year_group' | 'status'>;
+      payload: Pick<Team, 'name' | 'player1' | 'player2' | 'skill_level' | 'bracket' | 'year_group' | 'status'> &
+        Partial<Pick<Team, 'is_teacher' | 'points' | 'games_played'>>;
     }
   | {
       action: 'delete-team';
@@ -97,9 +100,7 @@ async function upsertNextRoundMatch(supabase: ReturnType<typeof createSupabaseSe
     throw nextMatchError;
   }
 
-  const payload: Partial<Record<'team1_id' | 'team2_id' | 'team3_id' | 'team4_id' | 'status', string | null>> = {
-    status: 'upcoming'
-  };
+  const payload: Partial<Record<'team1_id' | 'team2_id' | 'team3_id' | 'team4_id', string | null>> = {};
 
   if (slots[0] === 1) {
     payload.team1_id = winnerIds[0] || null;
@@ -110,6 +111,10 @@ async function upsertNextRoundMatch(supabase: ReturnType<typeof createSupabaseSe
   }
 
   if (existingNextMatch) {
+    // Only re-slot the team(s) this parent feeds. Crucially, do NOT touch the
+    // next match's status: if it has already gone live or been completed, forcing
+    // it back to 'upcoming' would silently un-do a played match. Preserve whatever
+    // status it currently has.
     const { error } = await supabase.from('matches').update(payload).eq('id', existingNextMatch.id);
     if (error) {
       throw error;
@@ -135,7 +140,11 @@ async function upsertNextRoundMatch(supabase: ReturnType<typeof createSupabaseSe
     winner1_id: null,
     winner2_id: null,
     played_at: null,
-    duration_minutes: null
+    duration_minutes: null,
+    // Keep the whole knockout line on the same side of the next-term divide as its
+    // parent, so a Year 11 ("next term") match never spawns a round into the
+    // current Year 12 schedule.
+    is_next_term: match.is_next_term
   });
   if (error) {
     throw error;
@@ -152,7 +161,36 @@ export async function POST(request: Request) {
   const supabase = createSupabaseServerClient();
 
   if (body.action === 'set-live') {
+    // Enforce one live match per bracket. Before airing this match, demote any
+    // other match currently 'live' in the SAME bracket back to 'upcoming'. This
+    // prevents the "old game stayed live while a new one went live too" state and
+    // keeps the home scorebug unambiguous (the other bracket can still run its own
+    // live match concurrently — different court).
+    const { data: target, error: targetError } = await supabase
+      .from('matches')
+      .select('bracket')
+      .eq('id', body.matchId)
+      .single();
+    if (targetError) throw targetError;
+
+    const { error: demoteError } = await supabase
+      .from('matches')
+      .update({ status: 'upcoming' })
+      .eq('bracket', (target as Pick<Match, 'bracket'>).bracket)
+      .eq('status', 'live')
+      .neq('id', body.matchId);
+    if (demoteError) throw demoteError;
+
     const { error } = await supabase.from('matches').update({ status: 'live' }).eq('id', body.matchId);
+    if (error) throw error;
+    return NextResponse.json({ ok: true });
+  }
+
+  // Override to take a match off-air without completing it. Reverts to 'upcoming'
+  // so an admin can recover a match that got stuck 'live' (e.g. after completing
+  // the wrong match) and re-run it cleanly.
+  if (body.action === 'stop-live') {
+    const { error } = await supabase.from('matches').update({ status: 'upcoming' }).eq('id', body.matchId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
   }
@@ -228,6 +266,29 @@ export async function POST(request: Request) {
 
   if (body.action === 'update-team') {
     const { error } = await supabase.from('teams').update(body.payload).eq('id', body.teamId);
+    if (error) throw error;
+    return NextResponse.json({ ok: true });
+  }
+
+  // Junior round-robin: add a game result to a team's running ladder totals.
+  // pointsDelta is that game's points, gamesDelta is normally 1 (negative to undo).
+  // Clamped at 0 so a mistaken undo can't drive totals negative.
+  if (body.action === 'adjust-standings') {
+    const { data: team, error: teamError } = await supabase
+      .from('teams')
+      .select('points, games_played')
+      .eq('id', body.teamId)
+      .single();
+    if (teamError) throw teamError;
+
+    const current = team as Pick<Team, 'points' | 'games_played'>;
+    const { error } = await supabase
+      .from('teams')
+      .update({
+        points: Math.max(0, current.points + body.pointsDelta),
+        games_played: Math.max(0, current.games_played + body.gamesDelta)
+      })
+      .eq('id', body.teamId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
   }

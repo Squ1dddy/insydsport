@@ -9,9 +9,20 @@ export function roundLabel(bracket: BracketName, round: number) {
 }
 
 export function matchLabel(match: EnrichedMatch) {
+  if (match.is_next_term) {
+    return `TBC · Next Term — Match ${match.match_number}`;
+  }
   const date = getScheduledDate(match.scheduled_day);
   const dateStr = date ? ` (${formatAestDate(date)})` : '';
   return `Day ${match.scheduled_day}${dateStr} — Match ${match.match_number}`;
+}
+
+// Normalises a team's year_group ("Year 12, Week 1" → "Year 12") for grouping.
+// Teacher teams collapse to a single "Teachers" bucket regardless of year.
+export function yearGroupOf(team: Team): string {
+  if (team.is_teacher) return 'Teachers';
+  const match = team.year_group.match(/Year\s*\d+(?:\s*-\s*\d+)?/i);
+  return match ? match[0].replace(/\s+/g, ' ').trim() : team.year_group;
 }
 
 export function getScheduledDate(day: number): string | null {
@@ -117,6 +128,21 @@ export function displayTeamName(name: string) {
   return name.toUpperCase();
 }
 
+// Reduce a player's full name to "First L" for public display (school privacy
+// rule: no surnames on the site). Applied server-side in /api/state so the full
+// surname never reaches the browser. Idempotent — running it on an already
+// reduced name ("Xavier M") returns the same value, and single-word names
+// ("Harrex", "TBC") are left untouched.
+export function displayPlayerName(name: string): string {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return trimmed;
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) return parts[0];
+  const last = parts[parts.length - 1];
+  const initial = last.charAt(0).toUpperCase();
+  return `${parts[0]} ${initial}`;
+}
+
 export type MatchPlacement = 'advanced' | 'eliminated' | 'tie';
 
 export function getMatchPlacements(match: EnrichedMatch) {
@@ -144,6 +170,34 @@ export function getMatchPlacements(match: EnrichedMatch) {
       })
     )
   };
+}
+
+export interface StandingRow {
+  rank: number;
+  team: Team;
+}
+
+// Junior round-robin ladder: rank by total points (desc). Ties broken by fewer
+// games played (more efficient), then alphabetically so the order is stable.
+// Equal-points teams share the same rank number.
+export function getJuniorStandings(teams: Team[]): StandingRow[] {
+  const juniors = teams
+    .filter((team) => team.bracket === 'junior' && !team.is_teacher)
+    .sort(
+      (a, b) =>
+        b.points - a.points ||
+        a.games_played - b.games_played ||
+        a.name.localeCompare(b.name)
+    );
+
+  let lastPoints: number | null = null;
+  let lastRank = 0;
+  return juniors.map((team, index) => {
+    const rank = lastPoints !== null && team.points === lastPoints ? lastRank : index + 1;
+    lastPoints = team.points;
+    lastRank = rank;
+    return { rank, team };
+  });
 }
 
 export function teamBadgeClass(team?: Team | null, winnerIds: string[] = []) {

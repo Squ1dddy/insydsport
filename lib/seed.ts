@@ -1,13 +1,21 @@
 import type { BracketName, Match, Team } from '@/types/tournament';
 import { createSupabaseServerClient } from '@/lib/supabase';
 
-type TeamSeed = Omit<Team, 'id'>;
-type MatchSeed = Omit<Match, 'id' | 'team1_id' | 'team2_id' | 'team3_id' | 'team4_id' | 'winner1_id' | 'winner2_id' | 'played_at' | 'duration_minutes'> & {
+type TeamSeed = Omit<Team, 'id' | 'points' | 'games_played' | 'is_teacher'> & {
+  points?: number;
+  games_played?: number;
+  is_teacher?: boolean;
+};
+type MatchSeed = Omit<
+  Match,
+  'id' | 'team1_id' | 'team2_id' | 'team3_id' | 'team4_id' | 'winner1_id' | 'winner2_id' | 'played_at' | 'duration_minutes' | 'is_next_term'
+> & {
   team1_name: string;
   team2_name: string;
   team3_name?: string | null;
   team4_name?: string | null;
   played_at?: string | null;
+  is_next_term?: boolean;
 };
 
 export const seniorTeams: TeamSeed[] = [
@@ -42,17 +50,71 @@ export const seniorTeams: TeamSeed[] = [
   { name: 'Holivy', player1: 'Holly D', player2: 'Olivia S', skill_level: 3, bracket: 'senior', year_group: 'Year 12, Week 1', status: 'active' }
 ];
 
+// Junior bracket runs as a points-based round-robin (not knockout). Each team
+// carries a running `points` total and `games_played` count; the ladder ranks on
+// points. Real names/skills/years come from the sign-up sheet; points carry over
+// from the paper ladder. Merged duplicate sign-ups: #28 Gus B = #30 On Ont,
+// #59 = #60 (Freddy/Souljah), #62 = #63 (Triple T's).
 export const juniorTeams: TeamSeed[] = [
-  { name: 'Daisy', player1: 'Billy B', player2: 'Jesse H', skill_level: 5, bracket: 'junior', year_group: 'Year 9-10', status: 'bye' },
-  { name: 'Jai Lung', player1: 'Lai J', player2: 'Martin L', skill_level: 3, bracket: 'junior', year_group: 'Year 9-10', status: 'active' },
-  { name: 'Northside', player1: 'Connor F', player2: 'Maceo W', skill_level: 5, bracket: 'junior', year_group: 'Year 9-10', status: 'active' },
-  { name: "Sorianna", player1: "Sophia O", player2: 'Arianna P', skill_level: 3, bracket: 'junior', year_group: 'Year 9-10', status: 'active' },
-  { name: 'The HH', player1: 'Harry H', player2: 'Harper S', skill_level: 2, bracket: 'junior', year_group: 'Year 9-10', status: 'active' },
-  { name: 'Year 9 Mum & Dad', player1: "Miss O", player2: 'Mr M', skill_level: 5, bracket: 'junior', year_group: 'Year 9-10', status: 'bye' },
-  { name: 'DIGGERS HC', player1: 'Atticus T', player2: 'Henry H', skill_level: 1, bracket: 'junior', year_group: 'Year 9-10', status: 'active' },
-  { name: 'Ball Ticklers', player1: 'Max C', player2: 'Louis C', skill_level: 1, bracket: 'junior', year_group: 'Year 9-10', status: 'active' },
-  { name: 'wesh', player1: 'Jonti B', player2: 'Raph R', skill_level: 5, bracket: 'junior', year_group: 'Year 9-10', status: 'active' },
-  { name: 'Static', player1: 'Chelsea K', player2: 'Ansh A', skill_level: 2, bracket: 'junior', year_group: 'Year 9-10', status: 'active' }
+  // --- Year 10 ---
+  { name: 'DIGGERS HC', player1: 'Atticus T', player2: 'Henry H', skill_level: 1, bracket: 'junior', year_group: 'Year 10', status: 'active', points: 5, games_played: 1 },
+  { name: 'Ball Ticklers', player1: 'Max C', player2: 'Louis C', skill_level: 1, bracket: 'junior', year_group: 'Year 10', status: 'active', points: 8, games_played: 2 },
+  { name: 'On Ont', player1: 'Gus B', player2: 'Massimo P', skill_level: 4, bracket: 'junior', year_group: 'Year 10', status: 'active', points: 5, games_played: 1 },
+  { name: 'Static', player1: 'Chelsea K', player2: 'Ansh A', skill_level: 2, bracket: 'junior', year_group: 'Year 10', status: 'active', points: 2, games_played: 1 },
+  { name: 'wesh', player1: 'Jonti B', player2: 'Raph R', skill_level: 5, bracket: 'junior', year_group: 'Year 10', status: 'active', points: 5, games_played: 1 },
+  { name: 'Eastlakes', player1: 'Matheo D', player2: 'Emre G', skill_level: 2, bracket: 'junior', year_group: 'Year 10', status: 'active', points: 3, games_played: 1 },
+  // --- Year 9 ---
+  { name: 'Northside', player1: 'Connor F', player2: 'Maceo W', skill_level: 5, bracket: 'junior', year_group: 'Year 9', status: 'active', points: 0, games_played: 0 },
+  { name: 'Sorianna', player1: "Sophia O", player2: 'Arianna P', skill_level: 3, bracket: 'junior', year_group: 'Year 9', status: 'active', points: 1, games_played: 1 },
+  { name: 'The HH', player1: 'Harry H', player2: 'Harper S', skill_level: 2, bracket: 'junior', year_group: 'Year 9', status: 'active', points: 2, games_played: 1 },
+  { name: 'T&C', player1: 'Tynan G', player2: 'Cadel F', skill_level: 5, bracket: 'junior', year_group: 'Year 9', status: 'active', points: 0, games_played: 0 },
+  { name: 'MC', player1: 'Cassius S', player2: 'Marlo S', skill_level: 5, bracket: 'junior', year_group: 'Year 9', status: 'active', points: 0, games_played: 0 },
+  { name: 'BH', player1: 'Bertie L', player2: 'Harrison G', skill_level: 3, bracket: 'junior', year_group: 'Year 9', status: 'active', points: 0, games_played: 0 },
+  { name: 'Giggle n Hoot', player1: 'Michello L', player2: 'Zane R', skill_level: 3, bracket: 'junior', year_group: 'Year 9', status: 'active', points: 0, games_played: 0 },
+  { name: 'Remitherat', player1: 'Louie H', player2: 'Remi M', skill_level: 3, bracket: 'junior', year_group: 'Year 9', status: 'active', points: 0, games_played: 0 },
+  // --- Year 8 ---
+  { name: 'Jai Lung', player1: 'Lai J', player2: 'Martin L', skill_level: 3, bracket: 'junior', year_group: 'Year 8', status: 'active', points: 5, games_played: 1 },
+  { name: 'Daisy', player1: 'Billy B', player2: 'Jesse H', skill_level: 5, bracket: 'junior', year_group: 'Year 8', status: 'active', points: 0, games_played: 0 },
+  { name: 'Mohsen & Felix', player1: 'Mohsen', player2: 'Felix', skill_level: 3, bracket: 'junior', year_group: 'Year 8', status: 'active', points: 0, games_played: 0 },
+  // --- Year 7 ---
+  { name: 'Freddy & Souljah', player1: 'Freddy A', player2: 'Souljah T', skill_level: 4, bracket: 'junior', year_group: 'Year 7', status: 'active', points: 5, games_played: 1 },
+  { name: "Triple T's", player1: 'Monty C', player2: 'Shivraj S', skill_level: 4, bracket: 'junior', year_group: 'Year 7', status: 'active', points: 0, games_played: 0 },
+  { name: 'Lil Jits', player1: 'Lucas L', player2: 'Rai C', skill_level: 3, bracket: 'junior', year_group: 'Year 7', status: 'active', points: 0, games_played: 0 },
+  { name: 'The Handballers', player1: 'Kaspar G', player2: 'Joseph U', skill_level: 4, bracket: 'junior', year_group: 'Year 7', status: 'active', points: 3, games_played: 1 },
+  { name: 'BJ', player1: 'James B', player2: 'Baxter A', skill_level: 1, bracket: 'junior', year_group: 'Year 7', status: 'active', points: 0, games_played: 0 },
+  // --- Ladder-only (not on the sign-up sheet, kept with recorded points) ---
+  { name: 'Darrel Strawberry HC', player1: 'Georgio', player2: 'Phoenix', skill_level: 3, bracket: 'junior', year_group: 'Year 7-10', status: 'active', points: 4, games_played: 1 },
+  { name: 'Harrex', player1: 'TBC', player2: 'TBC', skill_level: 3, bracket: 'junior', year_group: 'Year 10', status: 'active', points: 4, games_played: 1 }
+];
+
+// Teacher teams: admin-only, hidden from public views, never auto-queued, but an
+// admin can slot them into any junior or senior match.
+export const teacherTeams: TeamSeed[] = [
+  { name: 'Year 9 Mum & Dad', player1: "Miss O", player2: 'Mr M', skill_level: 5, bracket: 'junior', year_group: 'Teacher', status: 'active', is_teacher: true },
+  { name: 'Demolition Men', player1: 'Stewart O', player2: 'Chris D', skill_level: 5, bracket: 'senior', year_group: 'Teacher', status: 'active', is_teacher: true },
+  { name: 'The Ancients', player1: 'Chris E', player2: 'Nick S', skill_level: 5, bracket: 'senior', year_group: 'Teacher', status: 'active', is_teacher: true }
+];
+
+// Year 11 plays next term. They sit in the senior bracket but every Year 11 match
+// is flagged is_next_term and tucked behind the "TBC Next Term" toggle. Teams whose
+// players signed up on multiple teams are kept on the system but left out of matches
+// until the duplicates are resolved: Jethro & coolposeonthewall (Alek D),
+// Conrad F & butter turtle (Conrad F / Tristan T).
+export const year11Teams: TeamSeed[] = [
+  { name: 'Stranger and danger', player1: 'Finn B', player2: 'Alpha G', skill_level: 1, bracket: 'senior', year_group: 'Year 11', status: 'active' },
+  { name: 'MO & JO', player1: 'Tyler J', player2: 'Massimo V', skill_level: 5, bracket: 'senior', year_group: 'Year 11', status: 'active' },
+  { name: 'Hot shotz', player1: 'Iggy H', player2: 'Finn N', skill_level: 5, bracket: 'senior', year_group: 'Year 11', status: 'active' },
+  { name: '4Square', player1: 'Leo C', player2: 'Arvan W', skill_level: 3, bracket: 'senior', year_group: 'Year 11', status: 'active' },
+  { name: 'Jethro', player1: 'Alek D', player2: 'Jethro K', skill_level: 4, bracket: 'senior', year_group: 'Year 11', status: 'active' },
+  { name: 'pogfrogmorten', player1: 'Alec B', player2: 'Morten M', skill_level: 5, bracket: 'senior', year_group: 'Year 11', status: 'active' },
+  { name: 'coolposeonthewall', player1: 'Tristan T', player2: 'Alek D', skill_level: 5, bracket: 'senior', year_group: 'Year 11', status: 'active' },
+  { name: 'Conrad F', player1: 'Tristan T', player2: 'Conrad F', skill_level: 2, bracket: 'senior', year_group: 'Year 11', status: 'active' },
+  { name: 'Sodabean', player1: 'Lewis C', player2: 'Gabriel C', skill_level: 4, bracket: 'senior', year_group: 'Year 11', status: 'active' },
+  { name: 'Pierced viper + crimson skull', player1: 'Zola G', player2: 'Ella O', skill_level: 2, bracket: 'senior', year_group: 'Year 11', status: 'active' },
+  { name: 'Bounce bros', player1: 'Esteban C', player2: 'Mac A', skill_level: 3, bracket: 'senior', year_group: 'Year 11', status: 'active' },
+  { name: 'butter turtle', player1: 'Conrad F', player2: 'Leo G', skill_level: 5, bracket: 'senior', year_group: 'Year 11', status: 'active' },
+  { name: 'carel l', player1: 'Carel L', player2: 'Li C', skill_level: 5, bracket: 'senior', year_group: 'Year 11', status: 'active' },
+  { name: 'Trouble Squared', player1: 'Marlow C', player2: 'Oliver S', skill_level: 5, bracket: 'senior', year_group: 'Year 11', status: 'active' }
 ];
 
 export const matchSeeds: MatchSeed[] = [
@@ -63,8 +125,14 @@ export const matchSeeds: MatchSeed[] = [
   { bracket: 'senior', round: 1, match_number: 5, scheduled_day: 3, team1_name: 'SAJA BOYS', team2_name: 'Mr Kazanis fan club', team3_name: 'Plants v Zombies', team4_name: 'The Handball Kingz', team1_score: 0, team2_score: 0, team3_score: 0, team4_score: 0, status: 'upcoming', is_skill_stretch: false },
   { bracket: 'senior', round: 1, match_number: 6, scheduled_day: 3, team1_name: 'SydneyWolves', team2_name: "Joe R", team3_name: 'The Chronicles', team4_name: 'Caick', team1_score: 0, team2_score: 0, team3_score: 0, team4_score: 0, status: 'upcoming', is_skill_stretch: true },
   { bracket: 'senior', round: 1, match_number: 7, scheduled_day: 4, team1_name: 'PJ method', team2_name: 'Holivy', team3_name: 'The Greens', team4_name: 'K8ieGr8 & lilhuddyonthebeat2016', team1_score: 0, team2_score: 0, team3_score: 0, team4_score: 0, status: 'upcoming', is_skill_stretch: true },
-  { bracket: 'junior', round: 1, match_number: 1, scheduled_day: 1, team1_name: 'Northside', team2_name: 'wesh', team3_name: 'Jai Lung', team4_name: 'Sorianna', team1_score: 0, team2_score: 0, team3_score: 0, team4_score: 0, status: 'upcoming', is_skill_stretch: false },
-  { bracket: 'junior', round: 1, match_number: 2, scheduled_day: 1, team1_name: 'The HH', team2_name: 'Static', team3_name: 'DIGGERS HC', team4_name: 'Ball Ticklers', team1_score: 0, team2_score: 0, team3_score: 0, team4_score: 0, status: 'upcoming', is_skill_stretch: false }
+  // Juniors run a round-robin (see juniorTeams standings), so they have no knockout
+  // match fixtures — their results live on the points ladder, not in `matches`.
+  //
+  // Year 11 plays next term: senior bracket, flagged is_next_term, match_number
+  // offset to 101+ so it never collides with the Year 12 round-1 fixtures (1-7).
+  // Grouped by skill within 1-2; duplicate-player teams left unplaced.
+  { bracket: 'senior', round: 1, match_number: 101, scheduled_day: 6, team1_name: 'MO & JO', team2_name: 'Hot shotz', team3_name: 'pogfrogmorten', team4_name: 'carel l', team1_score: 0, team2_score: 0, team3_score: 0, team4_score: 0, status: 'upcoming', is_skill_stretch: false, is_next_term: true },
+  { bracket: 'senior', round: 1, match_number: 102, scheduled_day: 6, team1_name: 'Trouble Squared', team2_name: 'Sodabean', team3_name: '4Square', team4_name: 'Bounce bros', team1_score: 0, team2_score: 0, team3_score: 0, team4_score: 0, status: 'upcoming', is_skill_stretch: false, is_next_term: true }
 ];
 
 function buildTeamMap(teams: Team[]) {
@@ -110,7 +178,7 @@ export async function seedDatabase() {
     return { seeded: false };
   }
 
-  const seedTeamRows = [...seniorTeams, ...juniorTeams].map((team) => ({
+  const seedTeamRows = [...seniorTeams, ...juniorTeams, ...year11Teams, ...teacherTeams].map((team) => ({
     ...team,
     bracket: bracketLabel(team.bracket)
   }));
@@ -131,7 +199,10 @@ export async function seedDatabase() {
       skill_level: team.skill_level,
       bracket: team.bracket,
       year_group: team.year_group,
-      status: team.status
+      status: team.status,
+      points: team.points ?? 0,
+      games_played: team.games_played ?? 0,
+      is_teacher: team.is_teacher ?? false
     };
 
     if (existing) {
@@ -181,7 +252,8 @@ export async function seedDatabase() {
       winner1_id: null,
       winner2_id: null,
       played_at: match.played_at || (match.status === 'completed' ? new Date().toISOString() : null),
-      duration_minutes: null
+      duration_minutes: null,
+      is_next_term: match.is_next_term ?? false
     };
   });
 
@@ -251,7 +323,10 @@ export async function seedDatabase() {
       skill_level: team.skill_level,
       bracket: team.bracket,
       year_group: team.year_group,
-      status: record?.status ?? team.status
+      status: record?.status ?? team.status,
+      points: team.points ?? 0,
+      games_played: team.games_played ?? 0,
+      is_teacher: team.is_teacher ?? false
     };
 
     if (existing) {

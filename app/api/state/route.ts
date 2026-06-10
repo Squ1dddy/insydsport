@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseServerReadOnlyClient } from '@/lib/supabase';
+import { displayPlayerName } from '@/lib/tournament-utils';
 import type { EnrichedMatch, Match, Team, TournamentData } from '@/types/tournament';
 
 export async function GET() {
@@ -20,7 +21,16 @@ export async function GET() {
       return NextResponse.json({ error: matchesError.message }, { status: 500 });
     }
 
-    const teamRows = (teams || []) as Team[];
+    // Privacy: reduce player surnames to an initial BEFORE anything leaves the
+    // server. This is the single read path for every client (public site and the
+    // admin panel), so full surnames are never sent over the wire, rendered into
+    // the DOM, or visible in the network tab / inspect element. Full names stay in
+    // the DB (server-only) as the organiser's source of truth.
+    const teamRows = ((teams || []) as Team[]).map((team) => ({
+      ...team,
+      player1: displayPlayerName(team.player1),
+      player2: displayPlayerName(team.player2)
+    }));
     const matchRows = (matches || []) as Match[];
     const teamMap = new Map(teamRows.map((team) => [team.id, team]));
 
