@@ -18,6 +18,8 @@ function TeamRow({
   muted?: boolean;
   compact?: boolean;
 }) {
+  const [rosterOpen, setRosterOpen] = useState(false);
+
   if (!team) {
     return (
       <div className={`rounded-xl border border-dashed border-secondary/50 px-3 py-2 text-sm text-textMuted ${compact ? 'min-h-14' : 'min-h-16'}`}>
@@ -29,15 +31,20 @@ function TeamRow({
   return (
     <div className={`group relative rounded-xl border border-secondary/50 px-3 py-2 ${muted ? 'bg-secondary' : 'bg-[#101a2a]'} ${compact ? 'min-h-14' : 'min-h-16'}`}>
       <div className="flex items-center justify-between gap-3">
-        <button type="button" className={`text-left font-extrabold leading-tight transition hover:scale-105 duration-200 ${teamBadgeClass(team, winnerIds)}`}>
+        <button
+          type="button"
+          onClick={() => setRosterOpen((value) => !value)}
+          aria-expanded={rosterOpen}
+          className={`text-left font-extrabold leading-tight transition hover:scale-105 duration-200 ${teamBadgeClass(team, winnerIds)}`}
+        >
           <span className="block">{displayTeamName(team.name)}</span>
-          <span className="block text-[11px] font-semibold uppercase tracking-[0.28em] text-textMuted">{team.year_group}</span>
+          <span className="block text-[11px] font-semibold uppercase tracking-[0.28em] text-textMuted">{team.year_group} · tap for roster</span>
         </button>
         <div className="flex items-center gap-3">
           <span className={`text-2xl font-black tracking-tight transition ${muted ? 'text-eliminated' : 'text-slate-100'} ${score ? 'animate-scorePop' : ''}`}>{score}</span>
         </div>
       </div>
-      <TeamTooltip team={team} />
+      <TeamTooltip team={team} open={rosterOpen} />
     </div>
   );
 }

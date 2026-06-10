@@ -45,7 +45,7 @@ export default function HomePage() {
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
       {liveMatch ? (
         <motion.section initial={{ scale: 0.95 }} animate={{ scale: 1 }} className="overflow-hidden rounded-[2rem] border border-gold/60 bg-secondary p-5 shadow-card animate-livePulse">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-start lg:justify-between">
             <div>
               <span className="inline-flex items-center gap-2 rounded-full border border-red-500/40 bg-red-500/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.28em] text-red-200">
                 <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-dotPulse" />
@@ -54,7 +54,7 @@ export default function HomePage() {
               <h2 className="mt-3 text-2xl font-black uppercase text-slate-100 lg:text-4xl">Live Match</h2>
               <p className="mt-2 text-sm text-textMuted">{matchTeamsLabel(liveMatch)}</p>
             </div>
-            <div className="flex gap-4 text-center">
+            <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4 lg:flex lg:gap-4">
               {[
                 liveMatch.team1,
                 liveMatch.team2,

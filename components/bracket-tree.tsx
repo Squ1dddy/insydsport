@@ -91,6 +91,17 @@ function BracketNode({ match }: { match: EnrichedMatch }) {
   );
 }
 
+// Static class map so Tailwind keeps the column utilities (it can't see dynamic
+// strings). Grows as brackets gain rounds.
+const roundColumns: Record<number, string> = {
+  1: 'lg:grid-cols-1',
+  2: 'lg:grid-cols-2',
+  3: 'lg:grid-cols-3',
+  4: 'lg:grid-cols-4',
+  5: 'lg:grid-cols-5',
+  6: 'lg:grid-cols-6'
+};
+
 export function BracketTree({ matches, bracket, highlightRound }: { matches: EnrichedMatch[]; bracket: BracketName; highlightRound?: number }) {
   const totalRounds = roundCounts[bracket];
   const [collapsedRounds, setCollapsedRounds] = useState<number[]>([]);
@@ -101,7 +112,7 @@ export function BracketTree({ matches, bracket, highlightRound }: { matches: Enr
 
   return (
     <div className="w-full">
-      <div className="grid w-full gap-4 md:grid-cols-1 lg:grid-cols-5">
+      <div className={`grid w-full gap-4 md:grid-cols-1 ${roundColumns[totalRounds] ?? 'lg:grid-cols-5'}`}>
         {Array.from({ length: totalRounds }, (_, index) => {
           const roundNumber = index + 1;
           const roundMatches = matches.filter((match) => match.round === roundNumber).sort((a, b) => a.match_number - b.match_number);

@@ -129,6 +129,12 @@ export default function AdminPage() {
     }
   }
 
+  function logout() {
+    window.localStorage.removeItem(STORAGE_KEY);
+    setPassword('');
+    setAuthed(false);
+  }
+
   async function resetAndReseed() {
     const response = await fetch('/api/admin/reset-seed', {
       method: 'POST',
@@ -198,6 +204,13 @@ export default function AdminPage() {
                 {label}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={logout}
+              className="rounded-full border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm font-black uppercase tracking-[0.22em] text-red-200 transition-all duration-200 hover:scale-105"
+            >
+              Log out
+            </button>
           </div>
         </div>
       </section>
@@ -248,7 +261,24 @@ function LiveScoringTab({
   setSelectedWinners: (value: string[]) => void;
   onRefresh: () => Promise<unknown>;
 }) {
-  const tieInfo = selectedMatch ? getMatchPlacements(selectedMatch) : null;
+  const [liveScores, setLiveScores] = useState<number[]>([0, 0, 0, 0]);
+  const [scoreError, setScoreError] = useState<string | null>(null);
+
+  // Re-sync local scores only when the selected match changes. This keeps the
+  // scoring device authoritative for the match in play, so optimistic taps aren't
+  // overwritten by the realtime refresh echoing our own writes back.
+  useEffect(() => {
+    if (selectedMatch) {
+      setLiveScores([selectedMatch.team1_score, selectedMatch.team2_score, selectedMatch.team3_score, selectedMatch.team4_score]);
+      setScoreError(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMatch?.id]);
+
+  const displayMatch = selectedMatch
+    ? ({ ...selectedMatch, team1_score: liveScores[0], team2_score: liveScores[1], team3_score: liveScores[2], team4_score: liveScores[3] } as EnrichedMatch)
+    : null;
+  const tieInfo = displayMatch ? getMatchPlacements(displayMatch) : null;
   const liveTeams = [selectedMatch?.team1, selectedMatch?.team2, selectedMatch?.team3, selectedMatch?.team4].filter(Boolean) as Team[];
 
   async function setLive() {
@@ -257,26 +287,38 @@ function LiveScoringTab({
     await onRefresh();
   }
 
-  async function increment(slot: 1 | 2 | 3 | 4) {
+  async function adjustScore(slot: 1 | 2 | 3 | 4, delta: 1 | -1) {
     if (!selectedMatch) return;
-    await postAction({ action: 'increment', matchId: selectedMatch.id, slot });
-    await onRefresh();
+    const idx = slot - 1;
+    const snapshot = [...liveScores];
+    setScoreError(null);
+    // Update the UI instantly, then persist. Courtside on flaky wifi this makes
+    // taps feel immediate instead of waiting on a round-trip.
+    setLiveScores((prev) => prev.map((value, i) => (i === idx ? Math.max(0, value + delta) : value)));
+    try {
+      await postAction({ action: delta === 1 ? 'increment' : 'undo', matchId: selectedMatch.id, slot });
+    } catch {
+      setLiveScores(snapshot);
+      setScoreError('Score update failed — reverted. Check your connection and try again.');
+    }
   }
 
-  async function decrement(slot: 1 | 2 | 3 | 4) {
-    if (!selectedMatch) return;
-    await postAction({ action: 'undo', matchId: selectedMatch.id, slot });
-    await onRefresh();
-  }
+  const increment = (slot: 1 | 2 | 3 | 4) => adjustScore(slot, 1);
+  const decrement = (slot: 1 | 2 | 3 | 4) => adjustScore(slot, -1);
 
   async function completeMatch() {
     if (!selectedMatch) return;
 
+    if (tieInfo?.tieAtCutoff && selectedWinners.length !== 2) {
+      alert('You must select EXACTLY 2 teams to advance during a tie.');
+      return;
+    }
+
+    if (!window.confirm('Complete this match? The top 2 teams will be locked in as winners and the next-round match will be created.')) {
+      return;
+    }
+
     if (tieInfo?.tieAtCutoff) {
-      if (selectedWinners.length !== 2) {
-        alert('You must select EXACTLY 2 teams to advance during a tie.');
-        return;
-      }
       await postAction({ action: 'complete', matchId: selectedMatch.id, winnerIds: selectedWinners });
     } else {
       await postAction({ action: 'complete', matchId: selectedMatch.id });
@@ -332,10 +374,13 @@ function LiveScoringTab({
 
       {selectedMatch ? (
         <>
+          {scoreError ? (
+            <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-sm font-bold text-red-200">{scoreError}</div>
+          ) : null}
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-2">
             {[1, 2, 3, 4].map((slot) => {
               const team = [selectedMatch.team1, selectedMatch.team2, selectedMatch.team3, selectedMatch.team4][slot - 1];
-              const score = [selectedMatch.team1_score, selectedMatch.team2_score, selectedMatch.team3_score, selectedMatch.team4_score][slot - 1];
+              const score = liveScores[slot - 1];
               return (
                 <LiveScoreCard
                   key={slot}

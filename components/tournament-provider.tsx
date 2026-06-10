@@ -1,28 +1,32 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 import type { TournamentData } from '@/types/tournament';
+
+export type RealtimeStatus = 'live' | 'connecting' | 'offline';
 
 type TournamentContextValue = {
   data: TournamentData | null;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<TournamentData>;
-  bootstrap: () => Promise<void>;
+  realtimeStatus: RealtimeStatus;
 };
 
 const TournamentContext = createContext<TournamentContextValue | null>(null);
+
+const POLL_INTERVAL_MS = 20000;
 
 async function fetchTournamentData(): Promise<TournamentData> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
   try {
-    const response = await fetch('/api/state', { 
+    const response = await fetch('/api/state', {
       cache: 'no-store',
-      signal: controller.signal 
+      signal: controller.signal
     });
     clearTimeout(timeoutId);
 
@@ -44,6 +48,13 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<TournamentData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>('connecting');
+  const statusRef = useRef<RealtimeStatus>('connecting');
+
+  const setStatus = useCallback((next: RealtimeStatus) => {
+    statusRef.current = next;
+    setRealtimeStatus(next);
+  }, []);
 
   const refresh = useCallback(async () => {
     const next = await fetchTournamentData();
@@ -53,61 +64,63 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     return next;
   }, []);
 
-  const bootstrap = useCallback(async () => {
-    const response = await fetch('/api/bootstrap', { method: 'POST' });
-    if (!response.ok) {
-      throw new Error('Unable to seed tournament data.');
-    }
-  }, []);
-
   useEffect(() => {
     let active = true;
 
-    const init = async () => {
-      try {
-        const initial = await refresh();
-        if (!active) {
-          return;
-        }
-
-        if (initial.teams.length === 0 || initial.matches.length === 0) {
-          await bootstrap();
-          if (!active) {
-            return;
-          }
-          await refresh();
-        }
-      } catch (err) {
-        if (!active) {
-          return;
-        }
-        setError(err instanceof Error ? err.message : 'Something went wrong.');
-        setLoading(false);
-      }
-    };
-
-    init();
+    refresh().catch((err) => {
+      if (!active) return;
+      setError(err instanceof Error ? err.message : 'Something went wrong.');
+      setLoading(false);
+    });
 
     const client = getSupabaseBrowserClient();
+
+    // No realtime client (env not configured) — fall back to polling so the
+    // scoreboard never silently freezes.
+    if (!client) {
+      setStatus('offline');
+      const pollId = setInterval(() => {
+        refresh().catch(() => {});
+      }, POLL_INTERVAL_MS);
+      return () => {
+        active = false;
+        clearInterval(pollId);
+      };
+    }
+
     const channel = client
-      ? client
-          .channel('inner-sydney-matches')
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => {
-            refresh().catch((err) => setError(err instanceof Error ? err.message : 'Something went wrong.'));
-          })
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => {
-            refresh().catch((err) => setError(err instanceof Error ? err.message : 'Something went wrong.'));
-          })
-          .subscribe()
-      : null;
+      .channel('inner-sydney-matches')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => {
+        refresh().catch((err) => setError(err instanceof Error ? err.message : 'Something went wrong.'));
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => {
+        refresh().catch((err) => setError(err instanceof Error ? err.message : 'Something went wrong.'));
+      })
+      .subscribe((status) => {
+        if (!active) return;
+        if (status === 'SUBSCRIBED') {
+          setStatus('live');
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          setStatus('offline');
+        } else {
+          setStatus('connecting');
+        }
+      });
+
+    // Safety-net poll: whenever realtime isn't confirmed live, pull fresh data so
+    // a dropped socket can't leave viewers staring at stale scores.
+    const pollId = setInterval(() => {
+      if (statusRef.current !== 'live') {
+        refresh().catch(() => {});
+      }
+    }, POLL_INTERVAL_MS);
 
     return () => {
       active = false;
-      if (client && channel) {
-        client.removeChannel(channel);
-      }
+      clearInterval(pollId);
+      client.removeChannel(channel);
     };
-  }, [bootstrap, refresh]);
+  }, [refresh, setStatus]);
 
   const value = useMemo(
     () => ({
@@ -115,9 +128,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       loading,
       error,
       refresh,
-      bootstrap
+      realtimeStatus
     }),
-    [data, loading, error, refresh, bootstrap]
+    [data, loading, error, refresh, realtimeStatus]
   );
 
   return <TournamentContext.Provider value={value}>{children}</TournamentContext.Provider>;
