@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LiveIndicator } from '@/components/live-indicator';
@@ -14,14 +14,9 @@ const navItems = [
   { href: '/admin', label: 'Admin' }
 ];
 
-// Hype lines that crawl across the top ticker — pure broadcast flavour.
-const tickerLines = [
-  'Inner Sydney Handball Knockout',
-  'Season 1 · 2026',
-  'Top 2 advance · No mercy',
-  'Live from the amphitheatre',
-  'Every point counts'
-];
+// Base lines that crawl across the top ticker — broadcast flavour in the
+// courtside voice. Live match count is prepended dynamically when games are on.
+const baseTickerLines = ['Inner Sydney Handball Knockout', 'Season 1 · 2026', 'Top 2 advance', 'Seniors · Juniors · Year 11'];
 
 function ConnectionStatus({ status }: { status: RealtimeStatus }) {
   // When live we stay quiet (a small green dot); only speak up when the data feed
@@ -41,7 +36,7 @@ function ConnectionStatus({ status }: { status: RealtimeStatus }) {
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-amber-200"
-      title="Reconnecting to live updates"
+      title="Reconnecting — scores still refresh automatically every few seconds"
     >
       <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-dotPulse" />
       Syncing
@@ -67,6 +62,10 @@ export function Navbar() {
   const { data, realtimeStatus } = useTournament();
   const [isOpen, setIsOpen] = useState(false);
   const liveMatches = data?.matches.filter((match) => match.status === 'live').length || 0;
+  const tickerLines = useMemo(
+    () => (liveMatches > 0 ? [`${liveMatches} ${liveMatches === 1 ? 'match' : 'matches'} live now`, ...baseTickerLines] : baseTickerLines),
+    [liveMatches]
+  );
 
   return (
     <header className="sticky top-0 z-50 border-b border-line/80 bg-ink/85 backdrop-blur-xl">

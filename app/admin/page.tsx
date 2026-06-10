@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useTournament } from '@/components/tournament-provider';
 import { AdminJuniorLadder } from '@/components/admin-junior-ladder';
 import type { BracketName, EnrichedMatch, Team } from '@/types/tournament';
@@ -755,6 +755,19 @@ function CreateMatchForm({ matches, teams, onRefresh }: { matches: EnrichedMatch
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Any team already slotted into a match (any status). Used to split each year
+  // section into "free" vs "already in a match" so it's obvious at a glance who
+  // still needs a game — the fast path for building out the bracket.
+  const placedIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const match of matches) {
+      for (const id of [match.team1_id, match.team2_id, match.team3_id, match.team4_id]) {
+        if (id) set.add(id);
+      }
+    }
+    return set;
+  }, [matches]);
+
   // A senior match accepts any senior team plus any teacher team (teacher teams can
   // play in either bracket). Grouped by year for the dropdowns.
   const groupOrder = ['Year 12', 'Year 11', 'Teachers'];
@@ -770,6 +783,13 @@ function CreateMatchForm({ matches, teams, onRefresh }: { matches: EnrichedMatch
     const ib = groupOrder.indexOf(b);
     return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.localeCompare(b);
   });
+
+  const teamOption = (team: Team) => (
+    <option key={team.id} value={team.id} className="text-slate-100">
+      {displayTeamName(team.name)}
+      {team.is_teacher ? ' · Teacher' : ''} - {team.skill_level}
+    </option>
+  );
 
   function setSlot(index: number, value: string) {
     setSlots((prev) => prev.map((current, i) => (i === index ? value : current)));
@@ -838,16 +858,24 @@ function CreateMatchForm({ matches, teams, onRefresh }: { matches: EnrichedMatch
               className="mt-1 block w-full rounded-xl border border-secondary bg-primary px-3 py-2 text-sm text-slate-100 outline-none focus:border-gold"
             >
               <option value="">—</option>
-              {groups.map(([group, groupTeams]) => (
-                <optgroup key={group} label={group} className="bg-primary text-gold">
-                  {groupTeams.map((team) => (
-                    <option key={team.id} value={team.id} className="text-slate-100">
-                      {displayTeamName(team.name)}
-                      {team.is_teacher ? ' · Teacher' : ''}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
+              {groups.map(([group, groupTeams]) => {
+                const free = groupTeams.filter((team) => !placedIds.has(team.id));
+                const placed = groupTeams.filter((team) => placedIds.has(team.id));
+                return (
+                  <Fragment key={group}>
+                    {free.length > 0 ? (
+                      <optgroup label={`${group} · Free (${free.length})`} className="bg-primary text-volt">
+                        {free.map(teamOption)}
+                      </optgroup>
+                    ) : null}
+                    {placed.length > 0 ? (
+                      <optgroup label={`${group} · Already in a match`} className="bg-primary text-ash">
+                        {placed.map(teamOption)}
+                      </optgroup>
+                    ) : null}
+                  </Fragment>
+                );
+              })}
             </select>
           </label>
         ))}
@@ -1188,7 +1216,7 @@ function UpcomingMatchEditor({ match, teams, onRefresh }: { match: EnrichedMatch
             <option value="">{field.toUpperCase()}</option>
             {teams.map((team) => (
               <option key={team.id} value={team.id}>
-                {displayTeamName(team.name)}
+                {displayTeamName(team.name)} - {team.skill_level}
               </option>
             ))}
           </select>

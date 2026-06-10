@@ -73,7 +73,7 @@ export default function HistoryPage() {
             matches.map((match) => <HistoryRow key={match.id} match={match} />)
           ) : (
             <div className="rounded-3xl border border-dashed border-line bg-surface/40 px-4 py-12 text-center font-mono text-xs uppercase tracking-[0.2em] text-ash">
-              No completed matches yet.
+              The record books are empty — for now.
             </div>
           )}
         </div>

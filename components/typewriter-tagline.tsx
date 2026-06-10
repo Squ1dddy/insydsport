@@ -9,14 +9,12 @@ const messages = [
   'The Headers are out!',
   'Level 8 are trash',
   'Watch out for the Demolition Men',
-  'No friends on the court',
-  'Break 2 starts now. Are you ready?',
-  "The amphitheatre doesn't forget",
-  'Every point counts. Every game matters.',
-  'Season 1. No do-overs.',
-  'Legends are made at lunch',
-  "You trained for this. Or you didn't. Good luck either way.",
-  'The bracket has no mercy'
+  'TIKI TAKA PHONK PLAYS*',
+  '"I Always come back..." - Louis H',
+  "It's Just us two ;)",
+  "Don't get Bento'ed",
+  'Watch your cortisol Charlie B.',
+  'You want to play? Lets Play!'
 ];
 
 export function TypewriterTagline() {

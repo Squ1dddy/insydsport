@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { EnrichedMatch } from '@/types/tournament';
 import { displayTeamName, matchLabel, roundLabel, teamBadgeClass, winnerIdsForMatch } from '@/lib/tournament-utils';
 import { TeamTooltip } from '@/components/team-tooltip';
@@ -19,7 +19,29 @@ function TeamRow({
   compact?: boolean;
 }) {
   const [rosterOpen, setRosterOpen] = useState(false);
+  const rowRef = useRef<HTMLDivElement>(null);
   const isWinner = team ? winnerIds.includes(team.id) : false;
+
+  // On touch devices the roster is controlled purely by `rosterOpen` (hover/focus
+  // reveals are gated to hover-capable pointers in TeamTooltip). Give it the usual
+  // overlay dismissals: tap anywhere outside, or press Escape, to close it.
+  useEffect(() => {
+    if (!rosterOpen) return;
+    const handlePointer = (event: PointerEvent) => {
+      if (rowRef.current && !rowRef.current.contains(event.target as Node)) {
+        setRosterOpen(false);
+      }
+    };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setRosterOpen(false);
+    };
+    document.addEventListener('pointerdown', handlePointer);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointer);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [rosterOpen]);
 
   if (!team) {
     return (
@@ -35,8 +57,9 @@ function TeamRow({
 
   return (
     <div
+      ref={rowRef}
       className={`group relative rounded-xl border px-3 py-2 transition-colors ${
-        isWinner ? 'border-gold/45 bg-gold/[0.07]' : muted ? 'border-line/50 bg-ink/40' : 'border-line bg-ink/60'
+        isWinner ? 'border-gold/45 bg-gold/[0.07]' : muted ? 'border-line/50 bg-ink/40 hover:border-gold/25' : 'border-line bg-ink/60 hover:border-gold/30 hover:bg-ink/70'
       } ${compact ? 'min-h-[3.25rem]' : 'min-h-[3.75rem]'}`}
     >
       {/* Winner accent rail (inset so it stays inside the rounded corners). */}
@@ -49,7 +72,7 @@ function TeamRow({
           className={`text-left leading-tight transition ${teamBadgeClass(team, winnerIds)}`}
         >
           <span className="block font-bold tracking-tight">{displayTeamName(team.name)}</span>
-          <span className="mt-0.5 block font-mono text-[10px] uppercase tracking-[0.2em] text-ash transition-colors group-hover:text-gold">{team.year_group} · roster ▾</span>
+          <span className="mt-0.5 block font-mono text-[10px] uppercase tracking-[0.2em] text-ash transition-colors group-hover:text-gold">{team.year_group} · roster {rosterOpen ? '▴' : '▾'}</span>
         </button>
         <span
           className={`digits font-display text-3xl leading-none tracking-tight ${
@@ -59,7 +82,7 @@ function TeamRow({
           {score}
         </span>
       </div>
-      <TeamTooltip team={team} open={rosterOpen} />
+      <TeamTooltip team={team} open={rosterOpen} onClose={() => setRosterOpen(false)} />
     </div>
   );
 }

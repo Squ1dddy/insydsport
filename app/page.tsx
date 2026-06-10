@@ -62,7 +62,21 @@ export default function HomePage() {
     <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-10">
       {/* Live scorebugs — broadcast strips pinned above the hero whenever a match
           is on, for BOTH brackets, independent of the senior/junior toggle below. */}
-      {liveMatches.map((liveMatch) => (
+      {liveMatches.map((liveMatch) => {
+        // Whoever sits in the top 2 by current score (and has scored) is shown as
+        // advancing right now — that's the whole point of the 4-team format.
+        const liveTeams = [
+          { team: liveMatch.team1, score: liveMatch.team1_score },
+          { team: liveMatch.team2, score: liveMatch.team2_score },
+          { team: liveMatch.team3, score: liveMatch.team3_score },
+          { team: liveMatch.team4, score: liveMatch.team4_score }
+        ].filter((entry) => entry.team);
+        const advancingIds = [...liveTeams]
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 2)
+          .filter((entry) => entry.score > 0)
+          .map((entry) => entry.team!.id);
+        return (
         <motion.section
           key={liveMatch.id}
           initial={{ scale: 0.97, opacity: 0 }}
@@ -83,24 +97,32 @@ export default function HomePage() {
               <p className="mt-2 font-mono text-xs uppercase tracking-[0.2em] text-ash">{matchTeamsLabel(liveMatch)}</p>
             </div>
             <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:flex lg:gap-3">
-              {[liveMatch.team1, liveMatch.team2, liveMatch.team3, liveMatch.team4].filter(Boolean).map((team, index) => {
-                const score = [liveMatch.team1_score, liveMatch.team2_score, liveMatch.team3_score, liveMatch.team4_score][index];
+              {liveTeams.map(({ team, score }) => {
+                const advancing = advancingIds.includes(team!.id);
                 return (
                   <div
                     key={team!.id}
-                    className="min-w-[6rem] rounded-2xl border border-line bg-ink/70 px-4 py-3 text-center shadow-inset"
+                    className={`relative min-w-[6rem] rounded-2xl border px-4 py-3 text-center shadow-inset transition-colors ${
+                      advancing ? 'border-volt/60 bg-volt/[0.08]' : 'border-line bg-ink/70'
+                    }`}
                   >
+                    {advancing ? (
+                      <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full border border-volt/50 bg-ink px-1.5 py-0.5 font-mono text-[8px] font-bold uppercase tracking-[0.16em] text-volt">
+                        Adv
+                      </span>
+                    ) : null}
                     <p className="truncate font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-ash">
                       {displayTeamName(team!.name)}
                     </p>
-                    <p className="digits mt-1 font-display text-4xl leading-none text-volt">{score}</p>
+                    <p className={`digits mt-1 font-display text-4xl leading-none ${advancing ? 'text-volt' : 'text-bone'}`}>{score}</p>
                   </div>
                 );
               })}
             </div>
           </div>
         </motion.section>
-      ))}
+        );
+      })}
 
       {/* Hero */}
       <section className="relative overflow-hidden rounded-[2rem] border border-line bg-surface/80 p-6 shadow-card lg:p-12">
@@ -175,7 +197,7 @@ export default function HomePage() {
                 todayMatches.map((match) => <MatchCard key={match.id} match={match} />)
               ) : (
                 <div className="rounded-2xl border border-dashed border-line bg-surface/50 px-4 py-10 text-center font-mono text-xs uppercase tracking-[0.18em] text-ash">
-                  No matches scheduled for {activeBracket}s this week.
+                  Quiet week — no {activeBracket} games on the board.
                 </div>
               )}
             </div>
@@ -210,7 +232,7 @@ export default function HomePage() {
                 ))
               ) : (
                 <div className="rounded-2xl border border-dashed border-line bg-surface/50 px-4 py-8 text-center font-mono text-xs uppercase tracking-[0.18em] text-ash">
-                  No future {activeBracket} matches scheduled yet.
+                  Nothing on the horizon yet — check back soon.
                 </div>
               )}
             </div>
