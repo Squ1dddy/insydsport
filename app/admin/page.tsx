@@ -59,7 +59,7 @@ export default function AdminPage() {
   });
 
   useEffect(() => {
-    if (window.localStorage.getItem(STORAGE_KEY) === 'true') {
+    if (window.localStorage.getItem(STORAGE_KEY)) {
       setAuthed(true);
     }
   }, []);
@@ -91,7 +91,7 @@ export default function AdminPage() {
       const result = await response.json();
       
       if (result.ok) {
-        window.localStorage.setItem(STORAGE_KEY, 'true');
+        window.localStorage.setItem(STORAGE_KEY, password);
         setAuthed(true);
       } else {
         setLoginError(result.message || 'Incorrect password.');
@@ -102,7 +102,10 @@ export default function AdminPage() {
   }
 
   async function resetAndReseed() {
-    const response = await fetch('/api/admin/reset-seed', { method: 'POST' });
+    const response = await fetch('/api/admin/reset-seed', {
+      method: 'POST',
+      headers: { 'x-admin-password': window.localStorage.getItem(STORAGE_KEY) || '' }
+    });
     if (!response.ok) {
       throw new Error('Reset and reseed failed.');
     }
