@@ -59,9 +59,37 @@ export default function AdminPage() {
   });
 
   useEffect(() => {
-    if (window.localStorage.getItem(STORAGE_KEY)) {
-      setAuthed(true);
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    if (!stored) {
+      return;
     }
+
+    // Verify the stored password is still valid before trusting it. This avoids a
+    // stale credential (e.g. a pre-migration 'true' flag, or an old/rotated
+    // password) silently getting sent on writes and 401-ing mid-edit. Fail closed:
+    // anything other than a confirmed-valid password drops back to the login gate.
+    let active = true;
+    fetch('/api/admin/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: stored })
+    })
+      .then((res) => {
+        if (!active) return;
+        if (res.ok) {
+          setAuthed(true);
+        } else {
+          window.localStorage.removeItem(STORAGE_KEY);
+        }
+      })
+      .catch(() => {
+        if (!active) return;
+        window.localStorage.removeItem(STORAGE_KEY);
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const teams = data?.teams || [];
