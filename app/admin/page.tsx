@@ -153,20 +153,27 @@ export default function AdminPage() {
 
   if (!authed) {
     return (
-      <div className="mx-auto max-w-xl rounded-[2rem] border border-secondary bg-primary p-6 shadow-card">
-        <h1 className="text-3xl font-black text-slate-100">Admin login</h1>
-        <p className="mt-2 text-sm text-textMuted">Shared password gate for tournament control.</p>
+      <div className="mx-auto mt-6 max-w-md overflow-hidden rounded-[2rem] border border-line bg-gradient-to-b from-surface to-ink/90 p-7 shadow-card">
+        <p className="eyebrow text-volt">Control Room</p>
+        <h1 className="mt-2 font-display text-4xl uppercase tracking-wide text-bone">Admin Login</h1>
+        <p className="mt-2 text-sm text-ash">Shared password gate for tournament control.</p>
         <input
           type="password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') login();
+          }}
           placeholder="Enter password"
-          className="mt-5 w-full rounded-2xl border border-secondary bg-secondary px-4 py-3 text-slate-100 outline-none focus:border-gold"
+          className="mt-6 w-full rounded-2xl border border-line bg-ink/60 px-4 py-3 text-bone outline-none transition-colors focus:border-volt"
         />
-        <button onClick={login} className="mt-4 w-full rounded-2xl bg-gold px-4 py-3 text-sm font-black text-primary transition-all duration-200 hover:scale-[1.02]">
+        <button
+          onClick={login}
+          className="mt-4 w-full rounded-2xl bg-volt px-4 py-3 font-mono text-sm font-bold uppercase tracking-[0.22em] text-ink transition-all duration-200 hover:shadow-volt"
+        >
           Unlock
         </button>
-        {loginError ? <p className="mt-3 text-sm text-red-300">{loginError}</p> : null}
+        {loginError ? <p className="mt-3 text-sm text-flare">{loginError}</p> : null}
       </div>
     );
   }
@@ -181,11 +188,11 @@ export default function AdminPage() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-      <section className="rounded-[2rem] border border-secondary bg-primary p-4 shadow-card">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <section className="overflow-hidden rounded-[2rem] border border-line bg-gradient-to-b from-surface to-ink/90 p-5 shadow-card">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.35em] text-gold">Admin dashboard</p>
-            <h1 className="mt-1 text-3xl font-black text-slate-100">Match management</h1>
+            <p className="eyebrow text-volt">Control Room</p>
+            <h1 className="mt-1 font-display text-3xl uppercase tracking-wide text-bone lg:text-4xl">Match Management</h1>
           </div>
           <div className="flex flex-wrap gap-2">
             {[
@@ -197,8 +204,8 @@ export default function AdminPage() {
                 key={key}
                 type="button"
                 onClick={() => setTab(key as TabKey)}
-                className={`rounded-full px-4 py-2 text-sm font-black uppercase tracking-[0.22em] transition-all duration-200 hover:scale-105 ${
-                  tab === key ? 'bg-gold text-primary shadow-lg' : 'border border-secondary bg-primary text-textMuted hover:text-slate-100'
+                className={`rounded-full px-4 py-2 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] transition-all duration-200 ${
+                  tab === key ? 'bg-volt text-ink shadow-volt' : 'border border-line bg-ink/50 text-ash hover:text-bone'
                 }`}
               >
                 {label}
@@ -207,7 +214,7 @@ export default function AdminPage() {
             <button
               type="button"
               onClick={logout}
-              className="rounded-full border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm font-black uppercase tracking-[0.22em] text-red-200 transition-all duration-200 hover:scale-105"
+              className="rounded-full border border-flare/40 bg-flare/10 px-4 py-2 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-flare transition-all duration-200 hover:bg-flare/20"
             >
               Log out
             </button>
@@ -449,26 +456,36 @@ function LiveScoreCard({
   onMinus: () => void;
 }) {
   return (
-    <article className={`min-h-[280px] rounded-[2rem] border bg-secondary p-4 shadow-card transition-all duration-300 hover:scale-[1.02] ${active ? 'border-gold/70' : 'border-secondary'}`}>
-      <div className="flex h-full flex-col">
-        <div className="text-center">
-          <p className="text-sm font-black uppercase tracking-[0.24em] text-slate-100">{team ? displayTeamName(team.name) : 'TBD'}</p>
+    <article
+      className={`relative min-h-[280px] overflow-hidden rounded-[2rem] border bg-gradient-to-b from-surface to-ink/90 p-4 shadow-card transition-all duration-300 ${
+        active ? 'border-volt/60 shadow-volt' : 'border-line'
+      }`}
+    >
+      {active ? <span className="pointer-events-none absolute -right-12 -top-12 h-32 w-32 rounded-full bg-volt/15 blur-2xl" /> : null}
+      <div className="relative flex h-full flex-col">
+        <div className="flex items-center justify-center gap-2 text-center">
+          {active ? <span className="h-1.5 w-1.5 rounded-full bg-volt animate-dotPulse" /> : null}
+          <p className="truncate font-mono text-xs font-semibold uppercase tracking-[0.2em] text-bone">{team ? displayTeamName(team.name) : 'TBD'}</p>
         </div>
         <div className="flex flex-1 items-center justify-center">
-          <span className={`text-[6rem] font-black leading-none ${active ? 'text-gold' : 'text-slate-100'}`}>{score}</span>
+          <span key={score} className={`digits font-display text-[7rem] leading-none animate-scorePop ${active ? 'text-volt' : 'text-bone'}`}>{score}</span>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <button
             type="button"
             onClick={onMinus}
-            className={`min-h-20 rounded-2xl border text-4xl font-black transition-all duration-200 hover:scale-105 ${active ? 'border-gold/40 bg-gold/10 text-gold' : 'border-secondary bg-primary text-slate-100'}`}
+            className={`min-h-20 rounded-2xl border font-display text-4xl transition-all duration-150 active:scale-95 ${
+              active ? 'border-line bg-ink/60 text-ash hover:text-bone' : 'border-line bg-ink/40 text-ash'
+            }`}
           >
             −
           </button>
           <button
             type="button"
             onClick={onPlus}
-            className={`min-h-20 rounded-2xl border text-4xl font-black transition-all duration-200 hover:scale-105 ${active ? 'border-gold/40 bg-gold/10 text-gold' : 'border-secondary bg-primary text-slate-100'}`}
+            className={`min-h-20 rounded-2xl border font-display text-4xl transition-all duration-150 active:scale-95 ${
+              active ? 'border-volt/50 bg-volt/15 text-volt hover:bg-volt/25' : 'border-line bg-ink/40 text-bone hover:border-volt/30'
+            }`}
           >
             +
           </button>
@@ -663,8 +680,8 @@ function TeamManagementTab({
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[2rem] border border-secondary bg-primary p-5 shadow-card">
-        <h2 className="text-2xl font-black text-slate-100">Teams</h2>
+      <section className="rounded-[2rem] border border-line bg-surface/80 p-5 shadow-card">
+        <h2 className="font-display text-2xl uppercase tracking-wide text-bone">Teams</h2>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <TeamCreateForm newTeam={newTeam} setNewTeam={setNewTeam} onRefresh={onRefresh} />
           <div className="rounded-2xl border border-secondary bg-primary p-4">
@@ -676,8 +693,8 @@ function TeamManagementTab({
         <TeamList title="Juniors" teams={juniors} onRefresh={onRefresh} />
       </section>
 
-      <section className="rounded-[2rem] border border-secondary bg-primary p-5 shadow-card">
-        <h2 className="text-2xl font-black text-slate-100">Upcoming Matches</h2>
+      <section className="rounded-[2rem] border border-line bg-surface/80 p-5 shadow-card">
+        <h2 className="font-display text-2xl uppercase tracking-wide text-bone">Upcoming Matches</h2>
         <div className="mt-4 space-y-3">
           {upcomingMatches.map((match) => (
             <UpcomingMatchEditor key={match.id} match={match} teams={teams} onRefresh={onRefresh} />
@@ -686,8 +703,8 @@ function TeamManagementTab({
         </div>
       </section>
 
-      <section className="rounded-[2rem] border border-red-500/20 bg-red-500/5 p-5 shadow-card">
-        <h2 className="text-2xl font-black text-slate-100">Danger Zone</h2>
+      <section className="rounded-[2rem] border border-flare/25 bg-flare/[0.04] p-5 shadow-card">
+        <h2 className="font-display text-2xl uppercase tracking-wide text-flare">Danger Zone</h2>
         <div className="mt-4 flex flex-wrap gap-3">
           <button
             type="button"

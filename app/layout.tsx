@@ -1,11 +1,8 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import { Inter } from 'next/font/google';
 import './globals.css';
 import { Navbar } from '@/components/navbar';
 import { TournamentProvider } from '@/components/tournament-provider';
-
-const inter = Inter({ subsets: ['latin'], display: 'swap' });
 
 // Real site origin, used to make share-preview (Open Graph) image URLs absolute.
 // Netlify injects `URL` automatically at build time; NEXT_PUBLIC_SITE_URL can
@@ -38,11 +35,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={inter.className}>
+    <html lang="en" className="font-sans">
       <body>
         <TournamentProvider>
           <Navbar />
-          <main className="mx-auto min-h-screen w-full px-6 py-6 md:px-8 lg:px-10">{children}</main>
+          <main className="relative z-10 mx-auto min-h-screen w-full max-w-7xl px-5 py-7 md:px-8 lg:px-10">{children}</main>
         </TournamentProvider>
       </body>
     </html>

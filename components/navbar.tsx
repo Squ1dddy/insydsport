@@ -10,8 +10,17 @@ import type { RealtimeStatus } from '@/components/tournament-provider';
 const navItems = [
   { href: '/', label: 'Home' },
   { href: '/brackets', label: 'Brackets' },
-  { href: '/history', label: 'Match History' },
+  { href: '/history', label: 'Results' },
   { href: '/admin', label: 'Admin' }
+];
+
+// Hype lines that crawl across the top ticker — pure broadcast flavour.
+const tickerLines = [
+  'Inner Sydney Handball Knockout',
+  'Season 1 · 2026',
+  'Top 2 advance · No mercy',
+  'Live from the amphitheatre',
+  'Every point counts'
 ];
 
 function ConnectionStatus({ status }: { status: RealtimeStatus }) {
@@ -19,16 +28,22 @@ function ConnectionStatus({ status }: { status: RealtimeStatus }) {
   // can't be confirmed, so viewers know whether scores are current.
   if (status === 'live') {
     return (
-      <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.25em] text-emerald-300/80" title="Live updates connected">
-        <span className="h-2 w-2 rounded-full bg-emerald-400" />
-        <span className="hidden sm:inline">Live</span>
+      <span
+        className="inline-flex items-center gap-1.5 font-mono text-[10px] font-medium uppercase tracking-[0.28em] text-emerald-300/90"
+        title="Live updates connected"
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]" />
+        <span className="hidden sm:inline">Online</span>
       </span>
     );
   }
 
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-amber-200" title="Reconnecting to live updates">
-      <span className="h-2 w-2 rounded-full bg-amber-400 animate-dotPulse" />
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 font-mono text-[10px] font-medium uppercase tracking-[0.2em] text-amber-200"
+      title="Reconnecting to live updates"
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-dotPulse" />
       Syncing
     </span>
   );
@@ -36,11 +51,14 @@ function ConnectionStatus({ status }: { status: RealtimeStatus }) {
 
 function Logo() {
   return (
-    <img 
-      src="/images/school-emblem.png" 
-      alt="Inner Sydney school emblem" 
-      className="h-10 w-auto shrink-0 object-contain md:h-12" 
-    />
+    <span className="relative grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-line bg-surface shadow-inset md:h-12 md:w-12">
+      <span className="pointer-events-none absolute inset-0 rounded-xl bg-volt/10 blur-md" aria-hidden />
+      <img
+        src="/images/school-emblem.png"
+        alt="Inner Sydney school emblem"
+        className="relative h-8 w-auto object-contain md:h-9"
+      />
+    </span>
   );
 }
 
@@ -51,62 +69,92 @@ export function Navbar() {
   const liveMatches = data?.matches.filter((match) => match.status === 'live').length || 0;
 
   return (
-    <header className="sticky top-0 z-50 border-b border-secondary/50 bg-[#0b1320]/90 backdrop-blur-xl">
-      <div className="mx-auto flex w-full items-center justify-between gap-4 px-4 py-3 md:px-8 lg:px-10">
-        <Link href="/" className="flex items-center gap-3">
+    <header className="sticky top-0 z-50 border-b border-line/80 bg-ink/85 backdrop-blur-xl">
+      {/* Crawl ticker — broadcast lower-third energy at the very top. */}
+      <div className="flex items-center overflow-hidden border-b border-line/60 bg-volt py-1 text-ink">
+        <div className="flex shrink-0 animate-marquee whitespace-nowrap">
+          {[0, 1].map((dup) => (
+            <span key={dup} className="flex items-center" aria-hidden={dup === 1}>
+              {tickerLines.map((line) => (
+                <span key={line} className="flex items-center font-mono text-[10px] font-semibold uppercase tracking-[0.32em]">
+                  {line}
+                  <span className="mx-5 text-ink/50">✦</span>
+                </span>
+              ))}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-3 md:px-8 lg:px-10">
+        <Link href="/" className="group flex items-center gap-3">
           <Logo />
-          <div className="hidden md:block">
-            <p className="text-xs font-black uppercase tracking-[0.35em] text-gold">Inner Sydney</p>
-            <p className="text-lg font-black uppercase tracking-[0.18em] text-slate-100">Handball Knockout</p>
+          <div className="leading-none">
+            <p className="font-mono text-[10px] font-medium uppercase tracking-[0.42em] text-volt">Inner Sydney</p>
+            <p className="mt-1 font-display text-xl uppercase leading-none tracking-wide text-bone md:text-2xl">
+              Handball<span className="text-volt">·</span>KO
+            </p>
           </div>
         </Link>
 
         {/* Desktop Nav */}
-        <nav className="hidden md:flex items-center gap-2">
+        <nav className="hidden items-center gap-3 md:flex">
           <ConnectionStatus status={realtimeStatus} />
           {liveMatches > 0 ? <LiveIndicator /> : null}
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`rounded-full px-3 py-2 text-sm font-bold transition hover:scale-105 duration-200 ${
-                pathname === item.href ? 'bg-gold text-primary' : 'text-textMuted hover:bg-secondary hover:text-slate-100'
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
+          <div className="ml-1 flex items-center gap-1 rounded-full border border-line bg-surface/70 p-1">
+            {navItems.map((item) => {
+              const active = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`relative rounded-full px-4 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] transition-colors duration-200 ${
+                    active ? 'bg-volt text-ink' : 'text-ash hover:text-bone'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
         </nav>
 
         {/* Mobile Hamburger */}
-        <button className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary md:hidden" onClick={() => setIsOpen(!isOpen)}>
-            <div className="flex flex-col gap-1">
-                <span className={`h-0.5 w-6 rounded-full bg-slate-100 transition-transform ${isOpen ? 'rotate-45 translate-y-1.5' : ''}`}></span>
-                <span className={`h-0.5 w-6 rounded-full bg-slate-100 ${isOpen ? 'opacity-0' : ''}`}></span>
-                <span className={`h-0.5 w-6 rounded-full bg-slate-100 transition-transform ${isOpen ? '-rotate-45 -translate-y-1.5' : ''}`}></span>
-            </div>
+        <button
+          className="flex h-11 w-11 items-center justify-center rounded-xl border border-line bg-surface md:hidden"
+          onClick={() => setIsOpen(!isOpen)}
+          aria-label="Toggle navigation"
+        >
+          <div className="flex flex-col gap-1.5">
+            <span className={`h-0.5 w-6 rounded-full bg-bone transition-transform ${isOpen ? 'translate-y-2 rotate-45' : ''}`} />
+            <span className={`h-0.5 w-6 rounded-full bg-bone transition-opacity ${isOpen ? 'opacity-0' : ''}`} />
+            <span className={`h-0.5 w-6 rounded-full bg-bone transition-transform ${isOpen ? '-translate-y-2 -rotate-45' : ''}`} />
+          </div>
         </button>
       </div>
 
       {/* Mobile Dropdown */}
       {isOpen && (
-        <nav className="flex flex-col border-t border-secondary bg-primary p-4 md:hidden">
+        <nav className="flex flex-col gap-1 border-t border-line bg-ink p-4 md:hidden">
           <div className="mb-2 flex items-center gap-2">
             <ConnectionStatus status={realtimeStatus} />
             {liveMatches > 0 ? <LiveIndicator /> : null}
           </div>
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex h-12 items-center rounded-xl px-4 text-sm font-bold transition ${
-                pathname === item.href ? 'bg-gold text-primary' : 'text-textMuted'
-              }`}
-              onClick={() => setIsOpen(false)}
-            >
-              {item.label}
-            </Link>
-          ))}
+          {navItems.map((item) => {
+            const active = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex h-12 items-center rounded-xl px-4 font-mono text-xs font-semibold uppercase tracking-[0.22em] transition ${
+                  active ? 'bg-volt text-ink' : 'text-ash hover:bg-surface hover:text-bone'
+                }`}
+                onClick={() => setIsOpen(false)}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
       )}
     </header>

@@ -19,33 +19,71 @@ function TeamRow({
   compact?: boolean;
 }) {
   const [rosterOpen, setRosterOpen] = useState(false);
+  const isWinner = team ? winnerIds.includes(team.id) : false;
 
   if (!team) {
     return (
-      <div className={`rounded-xl border border-dashed border-secondary/50 px-3 py-2 text-sm text-textMuted ${compact ? 'min-h-14' : 'min-h-16'}`}>
+      <div
+        className={`flex items-center rounded-xl border border-dashed border-line/70 px-3 font-mono text-xs uppercase tracking-[0.2em] text-ash ${
+          compact ? 'min-h-[3.25rem]' : 'min-h-[3.75rem]'
+        }`}
+      >
         TBD
       </div>
     );
   }
 
   return (
-    <div className={`group relative rounded-xl border border-secondary/50 px-3 py-2 ${muted ? 'bg-secondary' : 'bg-[#101a2a]'} ${compact ? 'min-h-14' : 'min-h-16'}`}>
-      <div className="flex items-center justify-between gap-3">
+    <div
+      className={`group relative rounded-xl border px-3 py-2 transition-colors ${
+        isWinner ? 'border-gold/45 bg-gold/[0.07]' : muted ? 'border-line/50 bg-ink/40' : 'border-line bg-ink/60'
+      } ${compact ? 'min-h-[3.25rem]' : 'min-h-[3.75rem]'}`}
+    >
+      {/* Winner accent rail (inset so it stays inside the rounded corners). */}
+      {isWinner ? <span className="absolute inset-y-1.5 left-0 w-1 rounded-r bg-gold" aria-hidden /> : null}
+      <div className="flex items-center justify-between gap-3 pl-1.5">
         <button
           type="button"
           onClick={() => setRosterOpen((value) => !value)}
           aria-expanded={rosterOpen}
-          className={`text-left font-extrabold leading-tight transition hover:scale-105 duration-200 ${teamBadgeClass(team, winnerIds)}`}
+          className={`text-left leading-tight transition ${teamBadgeClass(team, winnerIds)}`}
         >
-          <span className="block">{displayTeamName(team.name)}</span>
-          <span className="block text-[11px] font-semibold uppercase tracking-[0.28em] text-textMuted">{team.year_group} · tap for roster</span>
+          <span className="block font-bold tracking-tight">{displayTeamName(team.name)}</span>
+          <span className="mt-0.5 block font-mono text-[10px] uppercase tracking-[0.2em] text-ash transition-colors group-hover:text-gold">{team.year_group} · roster ▾</span>
         </button>
-        <div className="flex items-center gap-3">
-          <span className={`text-2xl font-black tracking-tight transition ${muted ? 'text-eliminated' : 'text-slate-100'} ${score ? 'animate-scorePop' : ''}`}>{score}</span>
-        </div>
+        <span
+          className={`digits font-display text-3xl leading-none tracking-tight ${
+            muted ? 'text-eliminated' : isWinner ? 'text-volt' : 'text-bone'
+          } ${score ? 'animate-scorePop' : ''}`}
+        >
+          {score}
+        </span>
       </div>
       <TeamTooltip team={team} open={rosterOpen} />
     </div>
+  );
+}
+
+function StatusChip({ status }: { status: EnrichedMatch['status'] }) {
+  if (status === 'live') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-flare/50 bg-flare/12 px-2.5 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.26em] text-flare">
+        <span className="h-1.5 w-1.5 rounded-full bg-flare animate-dotPulse" />
+        Live
+      </span>
+    );
+  }
+  if (status === 'completed') {
+    return (
+      <span className="rounded-full border border-volt/40 bg-volt/10 px-2.5 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.26em] text-volt">
+        Final
+      </span>
+    );
+  }
+  return (
+    <span className="rounded-full border border-line bg-ink/60 px-2.5 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.26em] text-ash">
+      Upcoming
+    </span>
   );
 }
 
@@ -55,7 +93,7 @@ export function MatchCard({ match, compact = false }: { match: EnrichedMatch; co
 
   const winnerIds = useMemo(() => {
     if (!isCompleted) return [];
-    return match.winner1_id || match.winner2_id ? [match.winner1_id, match.winner2_id].filter(Boolean) as string[] : winnerIdsForMatch(match);
+    return match.winner1_id || match.winner2_id ? ([match.winner1_id, match.winner2_id].filter(Boolean) as string[]) : winnerIdsForMatch(match);
   }, [match, isCompleted]);
 
   const isWinner = (teamId?: string | null) => Boolean(teamId && winnerIds.includes(teamId));
@@ -68,46 +106,39 @@ export function MatchCard({ match, compact = false }: { match: EnrichedMatch; co
 
   return (
     <article
-      className={`rounded-3xl border bg-[linear-gradient(180deg,rgba(27,42,74,0.92),rgba(12,20,34,0.98))] p-4 shadow-card transition-all duration-300 hover:scale-[1.02] hover:border-gold/30 ${isLive ? 'border-gold/70 animate-livePulse' : 'border-secondary/50'} ${compact ? 'p-3' : 'p-4'}`}
+      className={`relative rounded-2xl border bg-gradient-to-b from-surface to-ink/90 shadow-card transition-all duration-300 hover:border-gold/40 ${
+        isLive ? 'border-flare/55 animate-livePulse' : 'border-line'
+      } ${compact ? 'p-3.5' : 'p-4'}`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.32em] text-textMuted">{roundLabel(match.bracket, match.round)}</p>
-          <p className="mt-1 text-xs uppercase tracking-[0.25em] text-gold/90">{matchLabel(match)}</p>
-          <p className="mt-2 text-sm font-black leading-tight text-slate-100">
-            {[match.team1, match.team2, match.team3, match.team4]
-              .filter(Boolean)
-              .map((team) => displayTeamName(team!.name))
-              .join(' · ')}
-          </p>
+      <div className="flex items-start justify-between gap-3 border-b border-line/70 pb-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-display text-base uppercase leading-none tracking-wide text-bone">{roundLabel(match.bracket, match.round)}</span>
+          </div>
+          <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-ash">{matchLabel(match)}</p>
         </div>
-        <span
-          className={`rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.3em] ${
-            match.status === 'live' ? 'border-red-500/40 bg-red-500/10 text-red-300' : match.status === 'completed' ? 'border-gold/40 bg-gold/10 text-gold' : 'border-secondary/50 bg-secondary text-textMuted'
-          }`}
-        >
-          {match.status.toUpperCase()}
-        </span>
+        <StatusChip status={match.status} />
       </div>
 
-      <div key={scoreTick} className={`mt-4 grid gap-3 ${match.team3_id ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
-        <div className="space-y-3">
+      <div key={scoreTick} className={`mt-3.5 grid gap-2.5 ${match.team3_id ? 'md:grid-cols-2' : 'grid-cols-1'}`}>
+        <div className="space-y-2.5">
           <TeamRow team={match.team1 || undefined} score={match.team1_score} winnerIds={winnerIds} muted={isCompleted && !isWinner(match.team1_id)} compact={compact} />
           <TeamRow team={match.team2 || undefined} score={match.team2_score} winnerIds={winnerIds} muted={isCompleted && !isWinner(match.team2_id)} compact={compact} />
         </div>
         {match.team3_id ? (
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             <TeamRow team={match.team3 || undefined} score={match.team3_score} winnerIds={winnerIds} muted={isCompleted && !isWinner(match.team3_id)} compact={compact} />
             <TeamRow team={match.team4 || undefined} score={match.team4_score} winnerIds={winnerIds} muted={isCompleted && !isWinner(match.team4_id)} compact={compact} />
           </div>
         ) : null}
       </div>
 
-      <div className="mt-4 flex items-center justify-between gap-3 text-xs text-textMuted">
-        <span>{match.is_skill_stretch ? '⚠ Skill stretch match' : 'Standard match'}</span>
-        <span>{match.status === 'completed' ? 'Winner locked in' : 'Top 2 advance'}</span>
+      <div className="mt-3.5 flex items-center justify-between gap-3 border-t border-line/70 pt-3 font-mono text-[10px] uppercase tracking-[0.18em] text-ash">
+        <span className="inline-flex items-center gap-1.5">
+          {match.is_skill_stretch ? <span className="text-flare">▲ Skill stretch</span> : 'Standard match'}
+        </span>
+        <span className={isCompleted ? 'text-volt' : ''}>{isCompleted ? 'Winners locked' : 'Top 2 advance'}</span>
       </div>
     </article>
   );
 }
-
