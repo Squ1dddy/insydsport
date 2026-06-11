@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useTournament } from '@/components/tournament-provider';
 import { AdminJuniorLadder } from '@/components/admin-junior-ladder';
 import type { BracketName, EnrichedMatch, Team } from '@/types/tournament';
@@ -295,6 +295,12 @@ function LiveScoringTab({
 }) {
   const [liveScores, setLiveScores] = useState<number[]>([0, 0, 0, 0]);
   const [scoreError, setScoreError] = useState<string | null>(null);
+  // Serial write queue — each DB write chains onto this promise so concurrent taps
+  // never race each other in the DB (which would cause lost increments via
+  // read-modify-write conflicts). Optimistic display is still immediate.
+  const writeQueue = useRef<Promise<void>>(Promise.resolve());
+  // Guard against stale writes firing after the admin switches to a different match.
+  const activeMatchId = useRef<string | undefined>(undefined);
 
   // Re-sync local scores only when the selected match changes. This keeps the
   // scoring device authoritative for the match in play, so optimistic taps aren't
@@ -303,6 +309,9 @@ function LiveScoringTab({
     if (selectedMatch) {
       setLiveScores([selectedMatch.team1_score, selectedMatch.team2_score, selectedMatch.team3_score, selectedMatch.team4_score]);
       setScoreError(null);
+      // Reset the queue and the guard for the new match.
+      activeMatchId.current = selectedMatch.id;
+      writeQueue.current = Promise.resolve();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMatch?.id]);
@@ -325,20 +334,30 @@ function LiveScoringTab({
     await onRefresh();
   }
 
-  async function adjustScore(slot: 1 | 2 | 3 | 4, delta: 1 | -1) {
+  function adjustScore(slot: 1 | 2 | 3 | 4, delta: 1 | -1) {
     if (!selectedMatch) return;
     const idx = slot - 1;
-    const snapshot = [...liveScores];
+    const matchId = selectedMatch.id; // capture at tap time — safe against re-renders
     setScoreError(null);
-    // Update the UI instantly, then persist. Courtside on flaky wifi this makes
-    // taps feel immediate instead of waiting on a round-trip.
-    setLiveScores((prev) => prev.map((value, i) => (i === idx ? Math.max(0, value + delta) : value)));
-    try {
-      await postAction({ action: delta === 1 ? 'increment' : 'undo', matchId: selectedMatch.id, slot });
-    } catch {
-      setLiveScores(snapshot);
-      setScoreError('Score update failed — reverted. Check your connection and try again.');
-    }
+
+    // Update the display immediately (functional updater always sees latest state,
+    // so rapid taps stack correctly even before any re-render).
+    setLiveScores((prev) => prev.map((v, i) => (i === idx ? Math.max(0, v + delta) : v)));
+
+    // Chain the DB write onto the serial queue. This guarantees writes are sent one
+    // at a time, so each server-side read-modify-write sees the result of the last
+    // one rather than racing against it — no lost increments from spam tapping.
+    writeQueue.current = writeQueue.current.then(async () => {
+      // Skip if the admin has already switched to a different match.
+      if (activeMatchId.current !== matchId) return;
+      try {
+        await postAction({ action: delta === 1 ? 'increment' : 'undo', matchId, slot });
+      } catch {
+        // Undo only this tap's contribution — no stale snapshot needed.
+        setLiveScores((prev) => prev.map((v, i) => (i === idx ? Math.max(0, v - delta) : v)));
+        setScoreError('Score update failed — check your connection and try again.');
+      }
+    });
   }
 
   const increment = (slot: 1 | 2 | 3 | 4) => adjustScore(slot, 1);

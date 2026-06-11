@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { motion } from 'framer-motion';
 import { TypewriterTagline } from '@/components/typewriter-tagline';
 import { WinnersBanner } from '@/components/winners-banner';
+import { AnimatedScore } from '@/components/animated-score';
 
 export default function HomePage() {
   const { data, loading, error } = useTournament();
@@ -120,7 +121,9 @@ export default function HomePage() {
                     <p className="truncate font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-ash">
                       {displayTeamName(team!.name)}
                     </p>
-                    <p className={`digits mt-1 font-display text-4xl leading-none ${advancing ? 'text-volt' : 'text-bone'}`}>{score}</p>
+                    <div className="mt-1">
+                      <AnimatedScore score={score} className={`digits font-display text-4xl leading-none ${advancing ? 'text-volt' : 'text-bone'}`} />
+                    </div>
                   </div>
                 );
               })}
