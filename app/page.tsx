@@ -5,7 +5,7 @@ import { useTournament } from '@/components/tournament-provider';
 import { MatchCard } from '@/components/match-card';
 import { JuniorStandings } from '@/components/junior-standings';
 import { NextTermSection } from '@/components/next-term-section';
-import { displayTeamName, formatAestDate, matchTeamsLabel, getScheduledDate, matchLabel, getCurrentScheduledDay } from '@/lib/tournament-utils';
+import { displayTeamName, formatAestDate, matchTeamsLabel, getScheduledDate, matchLabel, roundLabel, getCurrentScheduledDay } from '@/lib/tournament-utils';
 import type { BracketName } from '@/types/tournament';
 import { Skeleton } from '@/components/ui/skeleton';
 import { motion } from 'framer-motion';
@@ -220,36 +220,43 @@ export default function HomePage() {
               <p className="eyebrow text-volt">On The Horizon</p>
               <h2 className="mt-1 font-display text-2xl uppercase tracking-wide text-bone">Upcoming Matches</h2>
             </div>
-            <div className="grid gap-3">
+            <div className="space-y-6">
               {upcomingMatches.length > 0 ? (
-                upcomingMatches.map((match) => (
-                  <div
-                    key={match.id}
-                    className="group flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface/60 px-5 py-4 transition-colors duration-200 hover:border-volt/30 hover:bg-surface"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-bold text-bone">
-                        {[match.team1, match.team2, match.team3, match.team4]
-                          .filter(Boolean)
-                          .map((team) => displayTeamName(team!.name))
-                          .join('  ·  ')}
-                      </p>
-                      <p className="mt-1 truncate font-mono text-[10px] uppercase tracking-[0.2em] text-ash">{matchLabel(match)}</p>
-                    </div>
-                    {match.status === 'completed' ? (
-                      <span className="shrink-0 rounded-full border border-volt/40 bg-volt/10 px-3 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.24em] text-volt">
-                        Final
-                      </span>
-                    ) : match.status === 'live' ? (
-                      <span className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-flare/50 bg-flare/12 px-3 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.24em] text-flare">
-                        <span className="h-1.5 w-1.5 rounded-full bg-flare animate-dotPulse" />
-                        Live
-                      </span>
-                    ) : (
-                      <span className="shrink-0 rounded-full border border-line bg-ink/60 px-3 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.24em] text-ash">
-                        Upcoming
-                      </span>
-                    )}
+                [...new Set(upcomingMatches.map((m) => m.round))].sort((a, b) => a - b).map((round) => (
+                  <div key={round} className="space-y-3">
+                    <p className="border-b border-line/50 pb-2 font-mono text-[10px] font-semibold uppercase tracking-[0.24em] text-ash">
+                      {roundLabel(activeBracket, round)}
+                    </p>
+                    {upcomingMatches.filter((m) => m.round === round).map((match) => (
+                      <div
+                        key={match.id}
+                        className="group flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface/60 px-5 py-4 transition-colors duration-200 hover:border-volt/30 hover:bg-surface"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-bold text-bone">
+                            {[match.team1, match.team2, match.team3, match.team4]
+                              .filter(Boolean)
+                              .map((team) => displayTeamName(team!.name))
+                              .join('  ·  ')}
+                          </p>
+                          <p className="mt-1 truncate font-mono text-[10px] uppercase tracking-[0.2em] text-ash">{matchLabel(match)}</p>
+                        </div>
+                        {match.status === 'completed' ? (
+                          <span className="shrink-0 rounded-full border border-volt/40 bg-volt/10 px-3 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.24em] text-volt">
+                            Final
+                          </span>
+                        ) : match.status === 'live' ? (
+                          <span className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-flare/50 bg-flare/12 px-3 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.24em] text-flare">
+                            <span className="h-1.5 w-1.5 rounded-full bg-flare animate-dotPulse" />
+                            Live
+                          </span>
+                        ) : (
+                          <span className="shrink-0 rounded-full border border-line bg-ink/60 px-3 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.24em] text-ash">
+                            Upcoming
+                          </span>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 ))
               ) : (

@@ -800,7 +800,7 @@ function MatchesTab({ matches, teams, onRefresh }: { matches: EnrichedMatch[]; t
 
       <section className="rounded-[2rem] border border-line bg-surface/80 p-5 shadow-card">
         <h2 className="font-display text-2xl uppercase tracking-wide text-bone">Upcoming Matches</h2>
-        <p className="mt-1 text-sm text-textMuted">Reassign teams or reschedule. Year 11 (TBC next term) matches are listed here too.</p>
+        <p className="mt-1 text-sm text-textMuted">Reassign teams or reschedule. Year 11 (TBD next term) matches are listed here too.</p>
         <div className="mt-4 space-y-3">
           {upcomingMatches.map((match) => (
             <UpcomingMatchEditor key={match.id} match={match} teams={teams} onRefresh={onRefresh} />
@@ -979,7 +979,7 @@ function CreateMatchForm({ matches, teams, onRefresh }: { matches: EnrichedMatch
         </label>
         <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-textMuted">
           <input type="checkbox" checked={isNextTerm} onChange={(event) => setIsNextTerm(event.target.checked)} className="h-4 w-4 accent-gold" />
-          TBC next term (Year 11)
+          TBD next term (Year 11)
         </label>
       </div>
 
