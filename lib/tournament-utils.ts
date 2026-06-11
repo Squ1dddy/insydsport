@@ -36,6 +36,22 @@ export function getScheduledDate(day: number): string | null {
   return mapping[day] || null;
 }
 
+// Returns the "current" scheduled day driven by today's AEST date.
+// Highest day whose date has already arrived (<= now) — minimum 1.
+// Day 6 (next-term Year 11) is intentionally excluded.
+export function getCurrentScheduledDay(now: Date = new Date()): number {
+  const nowMs = now.getTime();
+  const days = [1, 2, 3, 4, 5] as const;
+  let result = 1;
+  for (const day of days) {
+    const iso = getScheduledDate(day);
+    if (iso && new Date(iso).getTime() <= nowMs) {
+      result = day;
+    }
+  }
+  return result;
+}
+
 export function matchTeamsLabel(match: EnrichedMatch) {
   return [match.team1, match.team2, match.team3, match.team4]
     .filter(Boolean)
