@@ -248,6 +248,7 @@ export default function AdminPage() {
           setSelectedLiveMatchId={setSelectedLiveMatchId}
           selectedWinners={selectedWinners}
           setSelectedWinners={setSelectedWinners}
+          currentDayOverride={data?.settings?.currentDayOverride ?? null}
           onRefresh={refresh}
         />
       ) : null}
@@ -281,6 +282,7 @@ function LiveScoringTab({
   setSelectedLiveMatchId,
   selectedWinners,
   setSelectedWinners,
+  currentDayOverride,
   onRefresh
 }: {
   liveMatches: EnrichedMatch[];
@@ -291,6 +293,7 @@ function LiveScoringTab({
   setSelectedLiveMatchId: (id: string) => void;
   selectedWinners: string[];
   setSelectedWinners: (value: string[]) => void;
+  currentDayOverride: number | null;
   onRefresh: () => Promise<unknown>;
 }) {
   const [liveScores, setLiveScores] = useState<number[]>([0, 0, 0, 0]);
@@ -365,8 +368,54 @@ function LiveScoringTab({
     await onRefresh();
   }
 
+  async function setCurrentDay(day: number | null) {
+    await postAction({ action: 'set-current-day', day });
+    await onRefresh();
+  }
+
   return (
     <section className="space-y-5">
+      {/* Home Day Override — controls which day "This Week" shows on the public home page */}
+      <div className="rounded-[2rem] border border-line bg-surface/80 p-4 shadow-card">
+        <p className="eyebrow text-volt">Home Page Day</p>
+        <p className="mt-1 text-sm text-ash">
+          Controls which day shows in "This Week" on the public home page for all viewers.{' '}
+          <span className="text-volt">Auto</span> uses today's date.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCurrentDay(null)}
+            className={`rounded-full px-4 py-2 font-mono text-xs font-semibold uppercase tracking-[0.22em] transition-all duration-200 ${
+              currentDayOverride === null
+                ? 'bg-volt text-ink shadow-volt'
+                : 'border border-line bg-ink/50 text-ash hover:text-bone'
+            }`}
+          >
+            Auto
+          </button>
+          {([1, 2, 3, 4, 5] as const).map((day) => (
+            <button
+              key={day}
+              type="button"
+              onClick={() => setCurrentDay(day)}
+              className={`rounded-full px-4 py-2 font-mono text-xs font-semibold uppercase tracking-[0.22em] transition-all duration-200 ${
+                currentDayOverride === day
+                  ? 'bg-volt text-ink shadow-volt'
+                  : 'border border-line bg-ink/50 text-ash hover:text-bone'
+              }`}
+            >
+              Day {day}
+            </button>
+          ))}
+        </div>
+        {currentDayOverride !== null ? (
+          <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.2em] text-flare">
+            Override active — home shows Day {currentDayOverride}. Set to Auto to restore date-driven behaviour.
+          </p>
+        ) : null}
+      </div>
+
       <div className="rounded-[2rem] border border-secondary bg-primary p-4 shadow-card">
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex-1 min-w-[280px] space-y-2 text-sm font-bold text-textMuted">

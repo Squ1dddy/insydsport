@@ -96,6 +96,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => {
         refresh().catch((err) => setError(err instanceof Error ? err.message : 'Something went wrong.'));
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => {
+        refresh().catch((err) => setError(err instanceof Error ? err.message : 'Something went wrong.'));
+      })
       .subscribe((status) => {
         if (!active) return;
         if (status === 'SUBSCRIBED') {

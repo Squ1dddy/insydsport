@@ -1,15 +1,34 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseServerReadOnlyClient } from '@/lib/supabase';
 import { displayPlayerName } from '@/lib/tournament-utils';
-import type { EnrichedMatch, Match, Team, TournamentData } from '@/types/tournament';
+import type { AppSettings, EnrichedMatch, Match, Team, TournamentData } from '@/types/tournament';
 
 export async function GET() {
   try {
     const supabase = getSupabaseServerReadOnlyClient();
-    const [{ data: teams, error: teamsError }, { data: matches, error: matchesError }] = await Promise.all([
+    const [
+      { data: teams, error: teamsError },
+      { data: matches, error: matchesError }
+    ] = await Promise.all([
       supabase.from('teams').select('*').order('name', { ascending: true }),
       supabase.from('matches').select('*').order('scheduled_day', { ascending: true }).order('round', { ascending: true }).order('match_number', { ascending: true })
     ]);
+
+    // app_settings is a single-row table added after launch — fetch it separately
+    // so a missing table (before the SQL migration is run) never breaks the read path.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let settingsRow: Record<string, any> | null = null;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (supabase as any)
+        .from('app_settings')
+        .select('current_day_override')
+        .eq('id', 1)
+        .maybeSingle();
+      settingsRow = result.data ?? null;
+    } catch {
+      // Table not yet created — fall back to auto (null override).
+    }
 
     if (teamsError) {
       console.error('Supabase teams error:', teamsError);
@@ -44,7 +63,11 @@ export async function GET() {
       winner2: match.winner2_id ? teamMap.get(match.winner2_id) || null : null
     }));
 
-    const data: TournamentData = { teams: teamRows, matches: enrichedMatches };
+    const settings: AppSettings = {
+      currentDayOverride: settingsRow?.current_day_override ?? null
+    };
+
+    const data: TournamentData = { teams: teamRows, matches: enrichedMatches, settings };
     return NextResponse.json(data);
   } catch (err) {
     console.error('Unexpected state API error:', err);

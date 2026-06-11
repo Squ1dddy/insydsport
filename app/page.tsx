@@ -5,7 +5,7 @@ import { useTournament } from '@/components/tournament-provider';
 import { MatchCard } from '@/components/match-card';
 import { JuniorStandings } from '@/components/junior-standings';
 import { NextTermSection } from '@/components/next-term-section';
-import { displayTeamName, formatAestDate, matchTeamsLabel, getScheduledDate, matchLabel } from '@/lib/tournament-utils';
+import { displayTeamName, formatAestDate, matchTeamsLabel, getScheduledDate, matchLabel, getCurrentScheduledDay } from '@/lib/tournament-utils';
 import type { BracketName } from '@/types/tournament';
 import { Skeleton } from '@/components/ui/skeleton';
 import { motion } from 'framer-motion';
@@ -18,14 +18,16 @@ export default function HomePage() {
   const { todayMatches, upcomingMatches, currentDay, currentDayDate } = useMemo(() => {
     // Exclude Year 11 (next term) from the current schedule — it has its own toggle.
     const matches = (data?.matches || []).filter((m) => m.bracket === activeBracket && !m.is_next_term);
-    const activeDayMatch = matches.find((m) => m.status !== 'completed');
-    const day = activeDayMatch?.scheduled_day ?? 1;
+
+    // Current day: admin override wins; otherwise derive from today's AEST date
+    // so the home page advances automatically each week without manual intervention.
+    const day = data?.settings?.currentDayOverride ?? getCurrentScheduledDay();
 
     return {
       currentDay: day,
       currentDayDate: getScheduledDate(day),
       todayMatches: matches.filter((match) => match.scheduled_day === day).sort((a, b) => a.match_number - b.match_number),
-      upcomingMatches: matches.filter((match) => match.scheduled_day > day).sort((a, b) => a.scheduled_day - b.scheduled_day)
+      upcomingMatches: matches.filter((match) => match.scheduled_day > day).sort((a, b) => a.scheduled_day - b.scheduled_day || a.match_number - b.match_number)
     };
   }, [data, activeBracket]);
   // Live scorebugs are always visible regardless of the senior/junior toggle —
@@ -203,9 +205,20 @@ export default function HomePage() {
                       </p>
                       <p className="mt-1 truncate font-mono text-[10px] uppercase tracking-[0.2em] text-ash">{matchLabel(match)}</p>
                     </div>
-                    <span className="shrink-0 rounded-full border border-line bg-ink/60 px-3 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.24em] text-ash">
-                      Upcoming
-                    </span>
+                    {match.status === 'completed' ? (
+                      <span className="shrink-0 rounded-full border border-volt/40 bg-volt/10 px-3 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.24em] text-volt">
+                        Final
+                      </span>
+                    ) : match.status === 'live' ? (
+                      <span className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-flare/50 bg-flare/12 px-3 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.24em] text-flare">
+                        <span className="h-1.5 w-1.5 rounded-full bg-flare animate-dotPulse" />
+                        Live
+                      </span>
+                    ) : (
+                      <span className="shrink-0 rounded-full border border-line bg-ink/60 px-3 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.24em] text-ash">
+                        Upcoming
+                      </span>
+                    )}
                   </div>
                 ))
               ) : (

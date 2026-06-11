@@ -54,7 +54,13 @@ export interface EnrichedMatch extends Match {
   winner2?: Team | null;
 }
 
+export interface AppSettings {
+  // null = auto (derived from today's AEST date); 1-5 = admin-forced day.
+  currentDayOverride: number | null;
+}
+
 export interface TournamentData {
   teams: Team[];
   matches: EnrichedMatch[];
+  settings: AppSettings;
 }

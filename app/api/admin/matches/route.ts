@@ -50,7 +50,8 @@ type ActionBody =
       action: 'create-match';
       payload: Omit<Match, 'id' | 'team1_score' | 'team2_score' | 'team3_score' | 'team4_score' | 'winner1_id' | 'winner2_id' | 'played_at' | 'duration_minutes'>;
     }
-  | { action: 'clear-scores' };
+  | { action: 'clear-scores' }
+  | { action: 'set-current-day'; day: number | null };
 
 function asTeamIds(match: Match) {
   return [match.team1_id, match.team2_id, match.team3_id, match.team4_id].filter(Boolean) as string[];
@@ -327,6 +328,14 @@ export async function POST(request: Request) {
         played_at: null
       })
       .neq('status', 'live');
+    if (error) throw error;
+    return NextResponse.json({ ok: true });
+  }
+
+  if (body.action === 'set-current-day') {
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert({ id: 1, current_day_override: body.day ?? null });
     if (error) throw error;
     return NextResponse.json({ ok: true });
   }
