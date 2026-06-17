@@ -1,4 +1,4 @@
-import type { BracketName, EnrichedMatch, Team } from '@/types/tournament';
+import type { BracketName, EnrichedMatch, Match, Team } from '@/types/tournament';
 
 export function roundLabel(bracket: BracketName, round: number) {
   if (bracket === 'senior') {
@@ -12,7 +12,7 @@ export function matchLabel(match: EnrichedMatch) {
   if (match.is_next_term) {
     return `TBC · Next Term — Match ${match.match_number}`;
   }
-  const date = getScheduledDate(match.scheduled_day);
+  const date = getMatchDate(match);
   const dateStr = date ? ` (${formatAestDate(date)})` : '';
   return `Day ${match.scheduled_day}${dateStr} — Match ${match.match_number}`;
 }
@@ -23,6 +23,16 @@ export function yearGroupOf(team: Team): string {
   if (team.is_teacher) return 'Teachers';
   const match = team.year_group.match(/Year\s*\d+(?:\s*-\s*\d+)?/i);
   return match ? match[0].replace(/\s+/g, ' ').trim() : team.year_group;
+}
+
+// Resolves a match's display date. Prefers its per-match `scheduled_date`
+// override (anchored to 9am AEST so the calendar day renders correctly in the
+// Sydney timezone), falling back to the fixed day→date mapping when unset.
+export function getMatchDate(match: Pick<Match, 'scheduled_day' | 'scheduled_date'>): string | null {
+  if (match.scheduled_date) {
+    return `${match.scheduled_date}T09:00:00+10:00`;
+  }
+  return getScheduledDate(match.scheduled_day);
 }
 
 export function getScheduledDate(day: number): string | null {
@@ -36,16 +46,56 @@ export function getScheduledDate(day: number): string | null {
   return mapping[day] || null;
 }
 
-// Returns the "current" scheduled day driven by today's AEST date.
-// Highest day whose date has already arrived (<= now) — minimum 1.
-// Day 6 (next-term Year 11) is intentionally excluded.
-export function getCurrentScheduledDay(now: Date = new Date()): number {
-  const nowMs = now.getTime();
-  const days = [1, 2, 3, 4, 5] as const;
-  let result = 1;
+// YYYY-MM-DD in Sydney time — lets us compare "which day are we on" by calendar
+// date (en-CA formats as YYYY-MM-DD, which sorts lexicographically).
+function aestDateKey(date: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Australia/Sydney',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(date);
+}
+
+// Returns the "current" scheduled day, driven by today's AEST date and AWARE of
+// per-match `scheduled_date` overrides. For each day it takes the earliest match
+// date on that day (falling back to the fixed day→date mapping for days with no
+// matches), then returns the highest day whose date is today or earlier. A day
+// becomes "current" on its actual calendar date. Day 6+ next-term (Year 11)
+// matches are intentionally excluded.
+//
+// Passing no matches falls back to the fixed mapping (legacy behaviour).
+export function getCurrentScheduledDay(
+  matches: Pick<Match, 'scheduled_day' | 'scheduled_date' | 'is_next_term'>[] = [],
+  now: Date = new Date()
+): number {
+  const todayKey = aestDateKey(now);
+
+  // day -> earliest YYYY-MM-DD (AEST) among that day's current-term matches.
+  const dayKeys = new Map<number, string>();
+  for (const match of matches) {
+    if (match.is_next_term) continue;
+    const iso = getMatchDate(match);
+    if (!iso) continue;
+    const key = aestDateKey(new Date(iso));
+    const existing = dayKeys.get(match.scheduled_day);
+    if (existing === undefined || key < existing) {
+      dayKeys.set(match.scheduled_day, key);
+    }
+  }
+
+  // Ensure baseline days 1-5 always have a date from the fixed mapping.
+  for (let day = 1; day <= 5; day += 1) {
+    if (!dayKeys.has(day)) {
+      const iso = getScheduledDate(day);
+      if (iso) dayKeys.set(day, aestDateKey(new Date(iso)));
+    }
+  }
+
+  const days = [...dayKeys.keys()].sort((a, b) => a - b);
+  let result = days[0] ?? 1;
   for (const day of days) {
-    const iso = getScheduledDate(day);
-    if (iso && new Date(iso).getTime() <= nowMs) {
+    if (dayKeys.get(day)! <= todayKey) {
       result = day;
     }
   }
@@ -214,6 +264,60 @@ export function getJuniorStandings(teams: Team[]): StandingRow[] {
     lastRank = rank;
     return { rank, team };
   });
+}
+
+export interface TeamStat {
+  team: Team;
+  /** Games played. */
+  played: number;
+  /** Senior: total score across completed matches. Junior: round-robin ladder points. */
+  points: number;
+  /** points / played (0 when unplayed) — the efficiency / per-game figure. */
+  avgPoints: number;
+}
+
+// Points-vs-games leaderboard, scoped to a bracket. The two brackets store their
+// scoring differently, so we read from the right source for each:
+//   • Senior (knockout): aggregate actual match scores from completed matches.
+//   • Junior (round-robin): there are NO junior match rows — they were removed in
+//     junior-round-robin.sql — so points/games live on the team record (same
+//     source as the junior ladder).
+export function getTeamStats(matches: EnrichedMatch[], teams: Team[], bracket: BracketName): TeamStat[] {
+  if (bracket === 'junior') {
+    return teams
+      .filter((team) => team.bracket === 'junior' && !team.is_teacher)
+      .map((team) => ({
+        team,
+        played: team.games_played,
+        points: team.points,
+        avgPoints: team.games_played ? team.points / team.games_played : 0
+      }))
+      .sort(
+        (a, b) => b.points - a.points || b.avgPoints - a.avgPoints || a.team.name.localeCompare(b.team.name)
+      );
+  }
+
+  const completed = matches.filter((m) => m.status === 'completed' && !m.is_next_term && m.bracket === bracket);
+  const byTeam = new Map<string, TeamStat>();
+  for (const match of completed) {
+    const slots = [
+      { team: match.team1, score: match.team1_score },
+      { team: match.team2, score: match.team2_score },
+      { team: match.team3, score: match.team3_score },
+      { team: match.team4, score: match.team4_score }
+    ];
+    for (const { team, score } of slots) {
+      if (!team) continue;
+      const row = byTeam.get(team.id) ?? { team, played: 0, points: 0, avgPoints: 0 };
+      row.played += 1;
+      row.points += score;
+      byTeam.set(team.id, row);
+    }
+  }
+
+  return [...byTeam.values()]
+    .map((row) => ({ ...row, avgPoints: row.played ? row.points / row.played : 0 }))
+    .sort((a, b) => b.points - a.points || b.avgPoints - a.avgPoints || a.team.name.localeCompare(b.team.name));
 }
 
 export function teamBadgeClass(team?: Team | null, winnerIds: string[] = []) {

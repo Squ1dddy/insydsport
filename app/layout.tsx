@@ -1,8 +1,9 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
 import { Navbar } from '@/components/navbar';
 import { TournamentProvider } from '@/components/tournament-provider';
+import { FollowNotifier } from '@/components/follow-notifier';
 
 // Real site origin, used to make share-preview (Open Graph) image URLs absolute.
 // Netlify injects `URL` automatically at build time; NEXT_PUBLIC_SITE_URL can
@@ -33,11 +34,22 @@ export const metadata: Metadata = {
   }
 };
 
+// Correct phone scaling + themed browser chrome. `maximumScale: 5` keeps
+// pinch-zoom available (accessibility) while preventing the iOS auto-zoom on
+// input focus that mis-scales the courtside admin panel.
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: '#0a0a0b'
+};
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className="font-sans">
       <body>
         <TournamentProvider>
+          <FollowNotifier />
           <Navbar />
           <main className="relative z-10 mx-auto min-h-screen w-full max-w-7xl overflow-x-clip px-5 py-7 md:px-8 lg:px-10">{children}</main>
         </TournamentProvider>

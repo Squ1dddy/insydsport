@@ -1,14 +1,14 @@
 import type { BracketName, Match, Team } from '@/types/tournament';
 import { createSupabaseServerClient } from '@/lib/supabase';
 
-type TeamSeed = Omit<Team, 'id' | 'points' | 'games_played' | 'is_teacher'> & {
+type TeamSeed = Omit<Team, 'id' | 'points' | 'games_played' | 'is_teacher' | 'star_count'> & {
   points?: number;
   games_played?: number;
   is_teacher?: boolean;
 };
 type MatchSeed = Omit<
   Match,
-  'id' | 'team1_id' | 'team2_id' | 'team3_id' | 'team4_id' | 'winner1_id' | 'winner2_id' | 'played_at' | 'duration_minutes' | 'is_next_term'
+  'id' | 'scheduled_date' | 'team1_id' | 'team2_id' | 'team3_id' | 'team4_id' | 'winner1_id' | 'winner2_id' | 'played_at' | 'duration_minutes' | 'is_next_term'
 > & {
   team1_name: string;
   team2_name: string;

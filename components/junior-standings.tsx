@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import type { Team } from '@/types/tournament';
 import { displayTeamName, getJuniorStandings, yearGroupOf } from '@/lib/tournament-utils';
+import { FollowButton } from '@/components/follow-button';
 
 const YEAR_ORDER = ['Year 7', 'Year 8', 'Year 9', 'Year 10', 'Year 7-10'];
 
@@ -72,17 +73,20 @@ export function JuniorStandings({ teams }: { teams: Team[] }) {
                 }`}
               >
                 <span className={`text-center font-display text-xl leading-none ${leader ? 'text-volt' : 'text-ash'}`}>{rank}</span>
-                <div className="min-w-0">
-                  <p className={`flex items-center gap-2 truncate text-sm font-bold leading-tight ${leader ? 'text-volt' : 'text-bone'}`}>
-                    <span className="truncate">{displayTeamName(team.name)}</span>
-                    <span className="shrink-0 rounded border border-line bg-ink/60 px-1.5 py-0.5 font-mono text-[8px] font-semibold uppercase tracking-[0.14em] text-ash">
-                      {yearGroupOf(team).replace('Year ', 'Yr ')}
-                    </span>
-                  </p>
-                  <p className="mt-0.5 truncate font-mono text-[10px] uppercase tracking-[0.14em] text-ash">
-                    {team.player1}
-                    {team.player2 ? ` · ${team.player2}` : ''}
-                  </p>
+                <div className="flex min-w-0 items-center gap-2">
+                  <FollowButton teamId={team.id} teamName={team.name} />
+                  <div className="min-w-0">
+                    <p className={`flex items-center gap-2 truncate text-sm font-bold leading-tight ${leader ? 'text-volt' : 'text-bone'}`}>
+                      <span className="truncate">{displayTeamName(team.name)}</span>
+                      <span className="shrink-0 rounded border border-line bg-ink/60 px-1.5 py-0.5 font-mono text-[8px] font-semibold uppercase tracking-[0.14em] text-ash">
+                        {yearGroupOf(team).replace('Year ', 'Yr ')}
+                      </span>
+                    </p>
+                    <p className="mt-0.5 truncate font-mono text-[10px] uppercase tracking-[0.14em] text-ash">
+                      {team.player1}
+                      {team.player2 ? ` · ${team.player2}` : ''}
+                    </p>
+                  </div>
                 </div>
                 <span className="text-center font-mono text-sm font-semibold text-ash">{team.games_played}</span>
                 <span className={`digits text-right font-display text-2xl leading-none ${leader ? 'text-volt' : 'text-bone'}`}>{team.points}</span>

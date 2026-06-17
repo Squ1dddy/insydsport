@@ -18,6 +18,9 @@ export interface Team {
   // Teacher teams are admin-only: hidden from every public view and never
   // auto-queued, but can be slotted into any junior or senior match by an admin.
   is_teacher: boolean;
+  // Crowd favourites: how many viewers have starred (followed) this team. Bumped
+  // via /api/stars when a device follows/unfollows; surfaced on the stats page.
+  star_count: number;
 }
 
 export interface Match {
@@ -26,6 +29,9 @@ export interface Match {
   round: number;
   match_number: number;
   scheduled_day: number;
+  // Optional per-match date override (YYYY-MM-DD). When set it overrides the
+  // fixed day→date mapping for display while the match keeps its "Day N" group.
+  scheduled_date: string | null;
   team1_id: string;
   team2_id: string;
   team3_id: string | null;
@@ -59,8 +65,21 @@ export interface AppSettings {
   currentDayOverride: number | null;
 }
 
+export type NotificationLevel = 'info' | 'warning' | 'success';
+
+// Admin-posted announcement shown as a dismissible banner on the home page.
+export interface Notification {
+  id: string;
+  title: string | null;
+  message: string;
+  level: NotificationLevel;
+  active: boolean;
+  created_at: string;
+}
+
 export interface TournamentData {
   teams: Team[];
   matches: EnrichedMatch[];
   settings: AppSettings;
+  notifications: Notification[];
 }

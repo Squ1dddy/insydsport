@@ -5,3 +5,4 @@ node_modules
 .git
 *.log
 **/node_modules/@next/swc-win32-x64-msvc/*.node
+.playwright-mcp/

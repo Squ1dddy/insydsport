@@ -6,6 +6,7 @@ import { JuniorStandings } from '@/components/junior-standings';
 import type { BracketName, EnrichedMatch, Team } from '@/types/tournament';
 import { displayTeamName, formatAestDateTime, getMatchPlacements, matchLabel } from '@/lib/tournament-utils';
 import { motion } from 'framer-motion';
+import { FollowButton } from '@/components/follow-button';
 
 type Filter = 'all' | BracketName | 'round';
 
@@ -147,17 +148,20 @@ function HistoryTeamCard({
             <span className={`digits font-display text-2xl leading-none ${isAdvanced ? 'text-volt' : 'text-bone'}`}>{score}</span>
           </p>
         </div>
-        <span
-          className={`shrink-0 rounded-full border px-2 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.18em] ${
-            isTie
-              ? 'border-amber-400/40 bg-amber-400/15 text-amber-200'
-              : isAdvanced
-                ? 'border-volt/40 bg-volt/15 text-volt'
-                : 'border-line bg-ink/60 text-ash'
-          }`}
-        >
-          {isTie ? 'Tie' : isAdvanced ? 'Advanced' : 'Out'}
-        </span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <FollowButton teamId={team.id} teamName={team.name} />
+          <span
+            className={`rounded-full border px-2 py-1 font-mono text-[9px] font-bold uppercase tracking-[0.18em] ${
+              isTie
+                ? 'border-amber-400/40 bg-amber-400/15 text-amber-200'
+                : isAdvanced
+                  ? 'border-volt/40 bg-volt/15 text-volt'
+                  : 'border-line bg-ink/60 text-ash'
+            }`}
+          >
+            {isTie ? 'Tie' : isAdvanced ? 'Advanced' : 'Out'}
+          </span>
+        </div>
       </div>
     </div>
   );

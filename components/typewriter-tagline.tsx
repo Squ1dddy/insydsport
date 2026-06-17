@@ -4,16 +4,13 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 
 const messages = [
-  "Don't Die Gully!",
+  'Dont get out Gully!',
   'Abhi Is NO SKILL',
-  'The Headers are out!',
-  'Level 8 are trash',
+  'Level 8 Need to Lock in',
   'Watch out for the Demolition Men',
-  'TIKI TAKA PHONK PLAYS*',
-  '"I Always come back..." - Louis H',
-  "It's Just us two ;)",
+  'TIKI TAKA PHONK IS DIALED!!',
+  'We Will Miss You Louis H :(',
   "Don't get Bento'ed",
-  'Watch your cortisol Charlie B.',
   'You want to play? Lets Play!'
 ];
 

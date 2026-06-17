@@ -22,6 +22,10 @@ create table if not exists matches (
   round int not null,
   match_number int not null,
   scheduled_day int not null,
+  -- Optional per-match date override. When set, it overrides the fixed
+  -- day→date mapping (getScheduledDate) for display while the match keeps its
+  -- "Day N" grouping. Null = use the day mapping.
+  scheduled_date date,
   team1_id uuid not null references teams(id) on delete cascade,
   team2_id uuid not null references teams(id) on delete cascade,
   team3_id uuid references teams(id) on delete cascade,
@@ -39,6 +43,17 @@ create table if not exists matches (
   -- Year 11 plays next term: kept behind a "TBC Next Term" toggle, excluded from
   -- the current schedule.
   is_next_term boolean not null default false
+);
+
+-- Admin-posted announcements shown as dismissible banners on the home page.
+-- See supabase/notifications.sql for RLS + realtime setup.
+create table if not exists notifications (
+  id uuid primary key default gen_random_uuid(),
+  title text,
+  message text not null,
+  level text not null default 'info' check (level in ('info', 'warning', 'success')),
+  active boolean not null default true,
+  created_at timestamptz not null default now()
 );
 
 create index if not exists matches_status_idx on matches(status);

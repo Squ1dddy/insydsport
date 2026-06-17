@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase';
-import type { Match, Team } from '@/types/tournament';
+import type { Match, Notification, Team } from '@/types/tournament';
 import { verifyAdminPassword } from '@/lib/admin-auth';
 
 type ActionBody =
@@ -17,6 +17,7 @@ type ActionBody =
         Pick<
           Match,
           | 'scheduled_day'
+          | 'scheduled_date'
           | 'round'
           | 'match_number'
           | 'is_skill_stretch'
@@ -48,10 +49,16 @@ type ActionBody =
     }
   | {
       action: 'create-match';
-      payload: Omit<Match, 'id' | 'team1_score' | 'team2_score' | 'team3_score' | 'team4_score' | 'winner1_id' | 'winner2_id' | 'played_at' | 'duration_minutes'>;
+      payload: Omit<Match, 'id' | 'scheduled_date' | 'team1_score' | 'team2_score' | 'team3_score' | 'team4_score' | 'winner1_id' | 'winner2_id' | 'played_at' | 'duration_minutes'>;
     }
   | { action: 'clear-scores' }
-  | { action: 'set-current-day'; day: number | null };
+  | { action: 'set-current-day'; day: number | null }
+  | {
+      action: 'create-notification';
+      payload: Pick<Notification, 'message'> & Partial<Pick<Notification, 'title' | 'level'>>;
+    }
+  | { action: 'toggle-notification'; id: string; active: boolean }
+  | { action: 'delete-notification'; id: string };
 
 function asTeamIds(match: Match) {
   return [match.team1_id, match.team2_id, match.team3_id, match.team4_id].filter(Boolean) as string[];
@@ -158,10 +165,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, message: 'Unauthorized' }, { status: 401 });
   }
 
-  const body = (await request.json()) as ActionBody;
-  const supabase = createSupabaseServerClient();
+  // Wrap the whole action handler so a Supabase/DB error returns a JSON message
+  // the admin client can show (e.g. "column … does not exist", connection drop)
+  // instead of an unhandled 500 surfacing as a generic "Admin action failed."
+  try {
+    const body = (await request.json()) as ActionBody;
+    const supabase = createSupabaseServerClient();
 
-  if (body.action === 'set-live') {
+    if (body.action === 'set-live') {
     // Enforce one live match per bracket. Before airing this match, demote any
     // other match currently 'live' in the SAME bracket back to 'upcoming'. This
     // prevents the "old game stayed live while a new one went live too" state and
@@ -340,5 +351,70 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  return NextResponse.json({ ok: false }, { status: 400 });
+  if (body.action === 'create-notification') {
+    const message = body.payload.message?.trim();
+    if (!message) {
+      return NextResponse.json({ ok: false, message: 'Notification message is required.' }, { status: 400 });
+    }
+    const { error } = await supabase.from('notifications').insert({
+      title: body.payload.title?.trim() || null,
+      message,
+      level: body.payload.level || 'info',
+      active: true
+    });
+    if (error) throw error;
+    return NextResponse.json({ ok: true });
+  }
+
+  if (body.action === 'toggle-notification') {
+    // Hide/show a notice without deleting it: flips `active`. Hidden notices stay
+    // in the DB (and are still returned by /api/state) so an admin can bring them
+    // back; the public banner only renders `active` ones. `.select()` lets us
+    // confirm a row actually changed — without the service-role key, RLS silently
+    // filters the write to zero rows and returns no error, which looks like a no-op.
+    const { data: updated, error } = await supabase
+      .from('notifications')
+      .update({ active: body.active })
+      .eq('id', body.id)
+      .select('id');
+    if (error) throw error;
+    if (!updated || updated.length === 0) {
+      return NextResponse.json(
+        { ok: false, message: 'Notice not updated — the server may be missing the Supabase service-role key (writes blocked by RLS).' },
+        { status: 500 }
+      );
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  if (body.action === 'delete-notification') {
+    const { data: deleted, error } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('id', body.id)
+      .select('id');
+    if (error) throw error;
+    if (!deleted || deleted.length === 0) {
+      return NextResponse.json(
+        { ok: false, message: 'Notice not removed — the server may be missing the Supabase service-role key (deletes blocked by RLS), or it was already gone.' },
+        { status: 500 }
+      );
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+    return NextResponse.json({ ok: false, message: 'Unknown action.' }, { status: 400 });
+  } catch (error) {
+    // Supabase throws PostgrestError objects (not Error instances) that carry the
+    // useful reason on `.message` — surface it so the admin sees *why* a write
+    // failed (e.g. "column … does not exist", "invalid input syntax for uuid").
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === 'object' && error !== null && 'message' in error && (error as { message?: unknown }).message
+        ? String((error as { message: unknown }).message)
+        : 'Unexpected server error.';
+    console.error('Admin action error:', error);
+    return NextResponse.json({ ok: false, message }, { status: 500 });
+  }
 }

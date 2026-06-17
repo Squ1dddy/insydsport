@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LiveIndicator } from '@/components/live-indicator';
+import { VersionBadge } from '@/components/version-badge';
 import { useTournament } from '@/components/tournament-provider';
 import type { RealtimeStatus } from '@/components/tournament-provider';
 
@@ -11,6 +12,7 @@ const navItems = [
   { href: '/', label: 'Home' },
   { href: '/brackets', label: 'Brackets' },
   { href: '/history', label: 'Results' },
+  { href: '/stats', label: 'Stats' },
   { href: '/admin', label: 'Admin' }
 ];
 
@@ -86,20 +88,35 @@ export function Navbar() {
       </div>
 
       <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-3 md:px-8 lg:px-10">
-        <Link href="/" className="group flex items-center gap-3">
-          <Logo />
-          <div className="leading-none">
-            <p className="font-mono text-[10px] font-medium uppercase tracking-[0.42em] text-volt">Inner Sydney</p>
-            <p className="mt-1 font-display text-xl uppercase leading-none tracking-wide text-bone md:text-2xl">
-              Handball<span className="text-volt">·</span>KO
-            </p>
-          </div>
-        </Link>
+        <div className="flex items-center gap-2.5">
+          <Link href="/" className="group flex items-center gap-3">
+            <Logo />
+            <div className="leading-none">
+              <p className="font-mono text-[10px] font-medium uppercase tracking-[0.42em] text-volt">Inner Sydney</p>
+              <p className="mt-1 font-display text-xl uppercase leading-none tracking-wide text-bone md:text-2xl">
+                Handball<span className="text-volt">·</span>KO
+              </p>
+            </div>
+          </Link>
+          {/* Version + patch notes — grey underlined chip with a "!" nudge until read. */}
+          <span className="mt-3 self-start">
+            <VersionBadge />
+          </span>
+        </div>
 
         {/* Desktop Nav */}
         <nav className="hidden items-center gap-3 md:flex">
           <ConnectionStatus status={realtimeStatus} />
           {liveMatches > 0 ? <LiveIndicator /> : null}
+          {/* Big-screen / projector view — only offered while a match is on air. */}
+          {liveMatches > 0 ? (
+            <Link
+              href="/screen"
+              className="inline-flex items-center gap-1.5 rounded-full border border-volt/40 bg-volt/10 px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-volt transition-colors duration-200 hover:bg-volt/20"
+            >
+              Big Screen
+            </Link>
+          ) : null}
           <div className="ml-1 flex items-center gap-1 rounded-full border border-line bg-surface/70 p-1">
             {navItems.map((item) => {
               const active = pathname === item.href;
@@ -139,6 +156,15 @@ export function Navbar() {
             <ConnectionStatus status={realtimeStatus} />
             {liveMatches > 0 ? <LiveIndicator /> : null}
           </div>
+          {liveMatches > 0 ? (
+            <Link
+              href="/screen"
+              onClick={() => setIsOpen(false)}
+              className="mb-1 flex h-12 items-center rounded-xl border border-volt/40 bg-volt/10 px-4 font-mono text-xs font-semibold uppercase tracking-[0.22em] text-volt"
+            >
+              Big Screen
+            </Link>
+          ) : null}
           {navItems.map((item) => {
             const active = pathname === item.href;
             return (

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { EnrichedMatch } from '@/types/tournament';
 import { displayTeamName, matchLabel, roundLabel, teamBadgeClass, winnerIdsForMatch } from '@/lib/tournament-utils';
 import { TeamTooltip } from '@/components/team-tooltip';
+import { FollowButton } from '@/components/follow-button';
 
 function TeamRow({
   team,
@@ -74,13 +75,16 @@ function TeamRow({
           <span className="block font-bold tracking-tight">{displayTeamName(team.name)}</span>
           <span className="mt-0.5 block font-mono text-[10px] uppercase tracking-[0.2em] text-ash transition-colors group-hover:text-gold">{team.year_group} · roster {rosterOpen ? '▴' : '▾'}</span>
         </button>
-        <span
-          className={`digits font-display text-3xl leading-none tracking-tight ${
-            muted ? 'text-eliminated' : isWinner ? 'text-volt' : 'text-bone'
-          } ${score ? 'animate-scorePop' : ''}`}
-        >
-          {score}
-        </span>
+        <div className="flex items-center gap-2">
+          <FollowButton teamId={team.id} teamName={team.name} />
+          <span
+            className={`digits font-display text-3xl leading-none tracking-tight ${
+              muted ? 'text-eliminated' : isWinner ? 'text-volt' : 'text-bone'
+            } ${score ? 'animate-scorePop' : ''}`}
+          >
+            {score}
+          </span>
+        </div>
       </div>
       <TeamTooltip team={team} open={rosterOpen} onClose={() => setRosterOpen(false)} />
     </div>

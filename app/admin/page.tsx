@@ -3,11 +3,22 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useTournament } from '@/components/tournament-provider';
 import { AdminJuniorLadder } from '@/components/admin-junior-ladder';
-import type { BracketName, EnrichedMatch, Team } from '@/types/tournament';
+import type { BracketName, EnrichedMatch, Notification, NotificationLevel, Team } from '@/types/tournament';
+import {
+  appendEvent,
+  clearSynced,
+  getEvents,
+  markFailed,
+  markSynced,
+  toCSV,
+  type JournalAction,
+  type JournalEntry
+} from '@/lib/score-journal';
 import {
   displayTeamName,
   formatAestDateTime,
   getMatchPlacements,
+  getScheduledDate,
   matchLabel,
   matchTeamsLabel,
   roundLabel,
@@ -16,19 +27,32 @@ import {
 import { motion } from 'framer-motion';
 
 const STORAGE_KEY = 'inner-sydney-admin-auth-password';
-type TabKey = 'live' | 'past' | 'junior' | 'matches' | 'teams';
+type TabKey = 'live' | 'past' | 'junior' | 'matches' | 'teams' | 'notices';
 type PlacementChoice = 'auto' | 'advanced' | 'eliminated';
+
+// Single sink for admin write failures: postAction is called from many child
+// components, so instead of threading error state through every one, the page
+// registers a handler here and every failed write surfaces in one banner.
+let adminErrorHandler: ((message: string) => void) | null = null;
 
 async function postAction(body: unknown) {
   const password = window.localStorage.getItem(STORAGE_KEY) || '';
-  const response = await fetch('/api/admin/matches', {
-    method: 'POST',
-    headers: { 
-      'Content-Type': 'application/json',
-      'x-admin-password': password
-    },
-    body: JSON.stringify(body)
-  });
+  let response: Response;
+  try {
+    response = await fetch('/api/admin/matches', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-admin-password': password
+      },
+      body: JSON.stringify(body)
+    });
+  } catch {
+    // Network-level failure (offline, DNS, server unreachable).
+    const message = 'Network error — your device may be offline. The action was NOT saved.';
+    adminErrorHandler?.(message);
+    throw new Error(message);
+  }
 
   if (response.status === 401) {
     window.localStorage.removeItem(STORAGE_KEY);
@@ -37,7 +61,12 @@ async function postAction(body: unknown) {
   }
 
   if (!response.ok) {
-    throw new Error('Admin action failed.');
+    // Read the real server-side reason so the admin sees *why* (e.g. a missing
+    // column, an RLS/permission error) instead of a generic failure string.
+    const data = (await response.json().catch(() => ({}))) as { message?: string };
+    const message = data.message || `Admin action failed (HTTP ${response.status}).`;
+    adminErrorHandler?.(message);
+    throw new Error(message);
   }
 }
 
@@ -47,6 +76,7 @@ export default function AdminPage() {
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [tab, setTab] = useState<TabKey>('live');
+  const [actionError, setActionError] = useState<string | null>(null);
   const [selectedLiveMatchId, setSelectedLiveMatchId] = useState('');
   const [selectedWinners, setSelectedWinners] = useState<string[]>([]);
   const [expandedMatchIds, setExpandedMatchIds] = useState<string[]>([]);
@@ -60,6 +90,15 @@ export default function AdminPage() {
     status: 'active' as Team['status'],
     is_teacher: false
   });
+
+  // Register the global write-failure sink so any failed postAction (from any
+  // child tab) raises the shared banner with the real server message.
+  useEffect(() => {
+    adminErrorHandler = (message: string) => setActionError(message);
+    return () => {
+      adminErrorHandler = null;
+    };
+  }, []);
 
   useEffect(() => {
     const stored = window.localStorage.getItem(STORAGE_KEY);
@@ -214,7 +253,8 @@ export default function AdminPage() {
               ['past', 'Past Games'],
               ['junior', 'Junior Ladder'],
               ['matches', 'Matches'],
-              ['teams', 'Team Management']
+              ['teams', 'Team Management'],
+              ['notices', 'Notices']
             ].map(([key, label]) => (
               <button
                 key={key}
@@ -238,6 +278,22 @@ export default function AdminPage() {
         </div>
       </section>
 
+      {actionError ? (
+        <div className="flex items-start justify-between gap-3 rounded-2xl border border-flare/40 bg-flare/10 p-4 text-sm font-bold text-flare">
+          <div className="min-w-0">
+            <p className="font-mono text-[11px] uppercase tracking-[0.22em]">Last action failed — not saved</p>
+            <p className="mt-1 break-words text-flare/90">{actionError}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            className="shrink-0 rounded-full border border-flare/40 px-3 py-1 font-mono text-[11px] uppercase tracking-[0.18em] transition-all duration-200 hover:bg-flare/20"
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
       {tab === 'live' ? (
         <LiveScoringTab
           liveMatches={liveMatches}
@@ -258,6 +314,8 @@ export default function AdminPage() {
       {tab === 'junior' ? <AdminJuniorLadder teams={teams} onAction={postAction} onRefresh={refresh} /> : null}
 
       {tab === 'matches' ? <MatchesTab matches={matches} teams={teams} onRefresh={refresh} /> : null}
+
+      {tab === 'notices' ? <NotificationsTab notifications={data?.notifications || []} onRefresh={refresh} /> : null}
 
       {tab === 'teams' ? (
         <TeamManagementTab
@@ -298,19 +356,27 @@ function LiveScoringTab({
 }) {
   const [liveScores, setLiveScores] = useState<number[]>([0, 0, 0, 0]);
   const [scoreError, setScoreError] = useState<string | null>(null);
+  // Bumped whenever the backup journal changes, so the Backup Log panel re-reads.
+  const [journalTick, setJournalTick] = useState(0);
+  const bumpJournal = () => setJournalTick((n) => n + 1);
   // Serial write queue — each DB write chains onto this promise so concurrent taps
   // never race each other in the DB (which would cause lost increments via
   // read-modify-write conflicts). Optimistic display is still immediate.
   const writeQueue = useRef<Promise<void>>(Promise.resolve());
   // Guard against stale writes firing after the admin switches to a different match.
   const activeMatchId = useRef<string | undefined>(undefined);
+  // Synchronous mirror of liveScores: the source of truth for rapid taps (so two
+  // taps in the same frame stack correctly) and for the journal's scoresAfter.
+  const liveScoresRef = useRef<number[]>([0, 0, 0, 0]);
 
   // Re-sync local scores only when the selected match changes. This keeps the
   // scoring device authoritative for the match in play, so optimistic taps aren't
   // overwritten by the realtime refresh echoing our own writes back.
   useEffect(() => {
     if (selectedMatch) {
-      setLiveScores([selectedMatch.team1_score, selectedMatch.team2_score, selectedMatch.team3_score, selectedMatch.team4_score]);
+      const fresh = [selectedMatch.team1_score, selectedMatch.team2_score, selectedMatch.team3_score, selectedMatch.team4_score];
+      setLiveScores(fresh);
+      liveScoresRef.current = fresh;
       setScoreError(null);
       // Reset the queue and the guard for the new match.
       activeMatchId.current = selectedMatch.id;
@@ -325,15 +391,60 @@ function LiveScoringTab({
   const tieInfo = displayMatch ? getMatchPlacements(displayMatch) : null;
   const liveTeams = [selectedMatch?.team1, selectedMatch?.team2, selectedMatch?.team3, selectedMatch?.team4].filter(Boolean) as Team[];
 
+  // Day buttons are derived from the schedule, not hardcoded: always at least
+  // 1-5, and extending automatically as matches are created on higher days
+  // (next-term Year 11 matches are excluded — they have their own section).
+  const scheduledDays = useMemo(() => {
+    const maxDay = [...liveMatches, ...upcomingMatches, ...completedMatches]
+      .filter((match) => !match.is_next_term)
+      .reduce((max, match) => Math.max(max, match.scheduled_day), 5);
+    return Array.from({ length: maxDay }, (_, index) => index + 1);
+  }, [liveMatches, upcomingMatches, completedMatches]);
+
+  // Record an action to the durable on-device journal the instant it happens.
+  function journal(action: JournalAction, extra: { slot?: number; teamName?: string }) {
+    if (!selectedMatch) return null;
+    const scores = liveScoresRef.current;
+    return appendEvent({
+      matchId: selectedMatch.id,
+      matchLabel: matchLabel(selectedMatch),
+      bracket: selectedMatch.bracket,
+      action,
+      slot: extra.slot,
+      teamName: extra.teamName,
+      scoresAfter: [scores[0], scores[1], scores[2], scores[3]]
+    });
+  }
+
   async function setLive() {
     if (!selectedMatch) return;
-    await postAction({ action: 'set-live', matchId: selectedMatch.id });
+    const journalId = journal('set-live', {});
+    bumpJournal();
+    try {
+      await postAction({ action: 'set-live', matchId: selectedMatch.id });
+      if (journalId) markSynced(journalId);
+    } catch (err) {
+      if (journalId) markFailed(journalId, err instanceof Error ? err.message : 'Write failed');
+      bumpJournal();
+      return;
+    }
+    bumpJournal();
     await onRefresh();
   }
 
   async function stopLive() {
     if (!selectedMatch) return;
-    await postAction({ action: 'stop-live', matchId: selectedMatch.id });
+    const journalId = journal('stop-live', {});
+    bumpJournal();
+    try {
+      await postAction({ action: 'stop-live', matchId: selectedMatch.id });
+      if (journalId) markSynced(journalId);
+    } catch (err) {
+      if (journalId) markFailed(journalId, err instanceof Error ? err.message : 'Write failed');
+      bumpJournal();
+      return;
+    }
+    bumpJournal();
     await onRefresh();
   }
 
@@ -343,9 +454,17 @@ function LiveScoringTab({
     const matchId = selectedMatch.id; // capture at tap time — safe against re-renders
     setScoreError(null);
 
-    // Update the display immediately (functional updater always sees latest state,
-    // so rapid taps stack correctly even before any re-render).
-    setLiveScores((prev) => prev.map((v, i) => (i === idx ? Math.max(0, v + delta) : v)));
+    // Apply against the synchronous ref so rapid taps in the same frame stack
+    // correctly, then mirror to display state. The ref also gives the journal an
+    // accurate post-tap score snapshot.
+    const next = liveScoresRef.current.map((v, i) => (i === idx ? Math.max(0, v + delta) : v));
+    liveScoresRef.current = next;
+    setLiveScores(next);
+
+    // Journal BEFORE the network write — durable even if the write or device fails.
+    const teamName = [selectedMatch.team1, selectedMatch.team2, selectedMatch.team3, selectedMatch.team4][idx]?.name;
+    const journalId = journal(delta === 1 ? 'increment' : 'undo', { slot, teamName });
+    bumpJournal();
 
     // Chain the DB write onto the serial queue. This guarantees writes are sent one
     // at a time, so each server-side read-modify-write sees the result of the last
@@ -355,10 +474,15 @@ function LiveScoringTab({
       if (activeMatchId.current !== matchId) return;
       try {
         await postAction({ action: delta === 1 ? 'increment' : 'undo', matchId, slot });
-      } catch {
-        // Undo only this tap's contribution — no stale snapshot needed.
-        setLiveScores((prev) => prev.map((v, i) => (i === idx ? Math.max(0, v - delta) : v)));
-        setScoreError('Score update failed — check your connection and try again.');
+        if (journalId) markSynced(journalId);
+        bumpJournal();
+      } catch (err) {
+        // Undo only this tap's contribution from both the ref and the display.
+        liveScoresRef.current = liveScoresRef.current.map((v, i) => (i === idx ? Math.max(0, v - delta) : v));
+        setLiveScores(liveScoresRef.current);
+        setScoreError('Score update failed — saved in the Backup Log below. Tap “Retry unsynced” once reconnected.');
+        if (journalId) markFailed(journalId, err instanceof Error ? err.message : 'Write failed');
+        bumpJournal();
       }
     });
   }
@@ -378,10 +502,22 @@ function LiveScoringTab({
       return;
     }
 
-    if (tieInfo?.tieAtCutoff) {
-      await postAction({ action: 'complete', matchId: selectedMatch.id, winnerIds: selectedWinners });
-    } else {
-      await postAction({ action: 'complete', matchId: selectedMatch.id });
+    // Journal the final scores before the write so the result is preserved even
+    // if completion fails to persist.
+    const journalId = journal('complete', {});
+    bumpJournal();
+    try {
+      if (tieInfo?.tieAtCutoff) {
+        await postAction({ action: 'complete', matchId: selectedMatch.id, winnerIds: selectedWinners });
+      } else {
+        await postAction({ action: 'complete', matchId: selectedMatch.id });
+      }
+      if (journalId) markSynced(journalId);
+      bumpJournal();
+    } catch (err) {
+      if (journalId) markFailed(journalId, err instanceof Error ? err.message : 'Write failed');
+      bumpJournal();
+      return;
     }
     setSelectedWinners([]);
     await onRefresh();
@@ -413,7 +549,7 @@ function LiveScoringTab({
           >
             Auto
           </button>
-          {([1, 2, 3, 4, 5] as const).map((day) => (
+          {scheduledDays.map((day) => (
             <button
               key={day}
               type="button"
@@ -577,7 +713,211 @@ function LiveScoringTab({
       ) : (
         <div className="rounded-3xl border border-dashed border-secondary bg-primary px-4 py-10 text-center text-textMuted">No matches available to score yet.</div>
       )}
+
+      <BackupLogPanel tick={journalTick} onChanged={bumpJournal} />
     </section>
+  );
+}
+
+function BackupLogPanel({ tick, onChanged }: { tick: number; onChanged: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+
+  // Re-read the on-device journal whenever it changes (tick) or the panel opens.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const events = useMemo<JournalEntry[]>(() => getEvents(), [tick]);
+  const unsynced = useMemo(() => events.filter((entry) => !entry.synced), [events]);
+  // Newest first for display.
+  const recent = useMemo(() => [...events].reverse().slice(0, 40), [events]);
+
+  function download() {
+    const csv = toCSV(events);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `handball-score-backup-${stamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(toCSV(events));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard unavailable (insecure context / permissions) — fall back to download.
+      download();
+    }
+  }
+
+  // Reconcile each match that has unsynced entries by pushing its last recorded
+  // scores to the DB (absolute, idempotent) — safe to re-run, no double counting.
+  async function retryUnsynced() {
+    if (unsynced.length === 0 || retrying) return;
+    setRetrying(true);
+    try {
+      const latestByMatch = new Map<string, JournalEntry>();
+      for (const entry of events) {
+        if (!entry.synced) latestByMatch.set(entry.matchId, entry); // events are oldest→newest, so last wins
+      }
+      for (const [matchId, entry] of latestByMatch) {
+        await postAction({
+          action: 'update-match',
+          matchId,
+          payload: {
+            team1_score: entry.scoresAfter[0],
+            team2_score: entry.scoresAfter[1],
+            team3_score: entry.scoresAfter[2],
+            team4_score: entry.scoresAfter[3]
+          }
+        });
+        // Mark every unsynced entry for this match as synced now its scores are reconciled.
+        for (const e of events) {
+          if (e.matchId === matchId && !e.synced) markSynced(e.id);
+        }
+      }
+    } catch {
+      // postAction already raised the shared error banner with the real reason.
+    } finally {
+      onChanged();
+      setRetrying(false);
+    }
+  }
+
+  // Keep a live reference to the latest retry routine so the reconnect listener
+  // (registered once) always invokes the current closure, not a stale one.
+  const retryRef = useRef(retryUnsynced);
+  retryRef.current = retryUnsynced;
+
+  // Auto-retry: the instant the device regains connectivity, push any unsynced
+  // scores — the admin no longer has to spot the badge and tap "Retry". A light
+  // interval backs up the 'online' event for flaky links where it doesn't fire.
+  // retryUnsynced no-ops when there is nothing unsynced or a retry is in flight,
+  // so this is cheap to call repeatedly.
+  useEffect(() => {
+    const attempt = () => {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+      retryRef.current();
+    };
+    window.addEventListener('online', attempt);
+    const intervalId = window.setInterval(attempt, 15000);
+    return () => {
+      window.removeEventListener('online', attempt);
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  return (
+    <div className="rounded-[2rem] border border-line bg-surface/80 p-4 shadow-card">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="eyebrow text-volt">Backup Log</p>
+          <p className="mt-1 text-sm text-ash">
+            Every score action is saved on this device the instant you tap — independent of the database, so nothing is lost if a
+            save fails.{' '}
+            {unsynced.length > 0 ? (
+              <span className="font-bold text-flare">{unsynced.length} not yet saved — retrying automatically.</span>
+            ) : (
+              <span className="text-emerald-300">All actions saved.</span>
+            )}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          className="shrink-0 rounded-full border border-line bg-ink/50 px-4 py-2 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-ash transition-all duration-200 hover:text-bone"
+        >
+          {open ? 'Hide' : `Show (${events.length})`}
+        </button>
+      </div>
+
+      {open ? (
+        <>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={download}
+              className="rounded-2xl bg-volt px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-ink transition-all duration-200 hover:shadow-volt"
+            >
+              Download CSV
+            </button>
+            <button
+              type="button"
+              onClick={copy}
+              className="rounded-2xl border border-line bg-ink/50 px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-ash transition-all duration-200 hover:text-bone"
+            >
+              {copied ? 'Copied ✓' : 'Copy'}
+            </button>
+            <button
+              type="button"
+              onClick={retryUnsynced}
+              disabled={unsynced.length === 0 || retrying}
+              className="rounded-2xl border border-flare/40 bg-flare/10 px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-flare transition-all duration-200 hover:bg-flare/20 disabled:opacity-40"
+            >
+              {retrying ? 'Retrying…' : `Retry unsynced (${unsynced.length})`}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm('Clear all SAVED entries from the backup log? Unsynced entries are kept.')) {
+                  clearSynced();
+                  onChanged();
+                }
+              }}
+              className="rounded-2xl border border-line bg-ink/50 px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-ash transition-all duration-200 hover:text-bone"
+            >
+              Clear saved
+            </button>
+          </div>
+
+          <div className="mt-4 max-h-80 overflow-auto rounded-2xl border border-line">
+            {recent.length === 0 ? (
+              <p className="px-4 py-6 text-center text-sm text-textMuted">No actions recorded yet.</p>
+            ) : (
+              <table className="w-full min-w-[34rem] border-collapse text-left text-xs">
+                <thead className="sticky top-0 bg-ink/90 font-mono uppercase tracking-[0.14em] text-ash">
+                  <tr>
+                    <th className="px-3 py-2 font-semibold">Time</th>
+                    <th className="px-3 py-2 font-semibold">Action</th>
+                    <th className="px-3 py-2 font-semibold">Match</th>
+                    <th className="px-3 py-2 font-semibold">Scores</th>
+                    <th className="px-3 py-2 font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recent.map((entry) => (
+                    <tr key={entry.id} className="border-t border-line/60 text-slate-100">
+                      <td className="whitespace-nowrap px-3 py-2 font-mono text-ash">
+                        {new Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Sydney', hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(entry.ts))}
+                      </td>
+                      <td className="px-3 py-2">
+                        {entry.action}
+                        {entry.slot ? <span className="text-ash"> · {entry.teamName || `slot ${entry.slot}`}</span> : null}
+                      </td>
+                      <td className="max-w-[12rem] truncate px-3 py-2 text-ash">{entry.matchLabel}</td>
+                      <td className="whitespace-nowrap px-3 py-2 font-mono">{entry.scoresAfter.join('-')}</td>
+                      <td className="px-3 py-2">
+                        {entry.synced ? (
+                          <span className="text-emerald-300">saved</span>
+                        ) : (
+                          <span className="font-bold text-flare" title={entry.error}>unsynced</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </>
+      ) : null}
+    </div>
   );
 }
 
@@ -997,6 +1337,191 @@ function CreateMatchForm({ matches, teams, onRefresh }: { matches: EnrichedMatch
   );
 }
 
+function NotificationsTab({ notifications, onRefresh }: { notifications: Notification[]; onRefresh: () => Promise<unknown> }) {
+  const [title, setTitle] = useState('');
+  const [message, setMessage] = useState('');
+  const [level, setLevel] = useState<NotificationLevel>('info');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Inline two-step delete confirm (id armed for removal) — avoids window.confirm,
+  // which silently returns false if the browser has suppressed dialogs for the tab.
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+
+  const levels: [NotificationLevel, string][] = [
+    ['info', 'Notice'],
+    ['warning', 'Important'],
+    ['success', 'Update']
+  ];
+
+  async function create() {
+    setError(null);
+    if (!message.trim()) {
+      setError('Message is required.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await postAction({ action: 'create-notification', payload: { title: title.trim() || null, message: message.trim(), level } });
+      setTitle('');
+      setMessage('');
+      setLevel('info');
+      await onRefresh();
+    } catch {
+      // The shared error banner already shows the real reason.
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function setActive(id: string, active: boolean) {
+    await postAction({ action: 'toggle-notification', id, active });
+    await onRefresh();
+  }
+
+  async function remove(id: string) {
+    setRemovingId(id);
+    try {
+      await postAction({ action: 'delete-notification', id });
+      await onRefresh();
+      setConfirmId(null);
+    } catch {
+      // postAction already surfaced the real reason in the shared error banner.
+    } finally {
+      setRemovingId(null);
+    }
+  }
+
+  const activeCount = notifications.filter((n) => n.active).length;
+
+  return (
+    <div className="space-y-6">
+      <section className="rounded-[2rem] border border-line bg-surface/80 p-5 shadow-card">
+        <h2 className="font-display text-2xl uppercase tracking-wide text-bone">Post a Notice</h2>
+        <p className="mt-1 text-sm text-textMuted">
+          Shows as a banner on the public home page for everyone. Each viewer can dismiss it with × — it stays gone for them
+          until you remove it here.
+        </p>
+
+        <div className="mt-4 grid gap-3">
+          <label className="text-[10px] font-bold uppercase tracking-[0.18em] text-textMuted">
+            Title (optional)
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="e.g. Day 4 moved to Wednesday"
+              className="mt-1 block w-full rounded-xl border border-secondary bg-primary px-3 py-2 text-sm text-slate-100 outline-none focus:border-gold"
+            />
+          </label>
+          <label className="text-[10px] font-bold uppercase tracking-[0.18em] text-textMuted">
+            Message (required)
+            <textarea
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+              rows={3}
+              placeholder="Write the announcement viewers will see…"
+              className="mt-1 block w-full resize-y rounded-xl border border-secondary bg-primary px-3 py-2 text-sm text-slate-100 outline-none focus:border-gold"
+            />
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-textMuted">Style</span>
+            {levels.map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setLevel(value)}
+                className={`rounded-full px-4 py-2 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] transition-all duration-200 ${
+                  level === value ? 'bg-volt text-ink shadow-volt' : 'border border-line bg-ink/50 text-ash hover:text-bone'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {error ? <p className="mt-3 text-sm font-bold text-flare">{error}</p> : null}
+
+        <button
+          type="button"
+          onClick={create}
+          disabled={busy}
+          className="mt-4 rounded-2xl bg-volt px-6 py-3 text-sm font-black uppercase tracking-[0.22em] text-ink transition-all duration-200 hover:shadow-volt disabled:opacity-40"
+        >
+          {busy ? 'Posting…' : 'Post Notice'}
+        </button>
+      </section>
+
+      <section className="rounded-[2rem] border border-line bg-surface/80 p-5 shadow-card">
+        <h2 className="font-display text-2xl uppercase tracking-wide text-bone">Live Notices ({activeCount})</h2>
+        <p className="mt-1 text-sm text-textMuted">
+          Active notices show on the home page. Hide one to take it down for everyone while keeping it here, or remove it to
+          delete it permanently.
+        </p>
+        <div className="mt-4 space-y-3">
+          {notifications.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-secondary bg-primary px-4 py-8 text-center text-textMuted">No notices posted.</div>
+          ) : (
+            notifications.map((notification) => (
+              <div
+                key={notification.id}
+                className={`flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-secondary bg-primary p-4 ${
+                  notification.active ? '' : 'opacity-60'
+                }`}
+              >
+                <div className="min-w-0">
+                  <p className="font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-gold">
+                    {levels.find(([value]) => value === notification.level)?.[1] || 'Notice'} · {formatAestDateTime(notification.created_at)}
+                    {notification.active ? null : <span className="ml-2 text-textMuted">· Hidden</span>}
+                  </p>
+                  {notification.title ? <p className="mt-2 text-sm font-black text-slate-100">{notification.title}</p> : null}
+                  <p className="mt-1 whitespace-pre-line break-words text-sm text-textMuted">{notification.message}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActive(notification.id, !notification.active)}
+                    className="rounded-full border border-secondary bg-surface px-3 py-2 text-xs font-black uppercase tracking-[0.2em] text-textMuted transition-all duration-200 hover:scale-105 hover:text-bone"
+                  >
+                    {notification.active ? 'Hide' : 'Show'}
+                  </button>
+                  {confirmId === notification.id ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => remove(notification.id)}
+                        disabled={removingId === notification.id}
+                        className="rounded-full border border-red-500/60 bg-red-500/20 px-3 py-2 text-xs font-black uppercase tracking-[0.2em] text-red-100 transition-all duration-200 hover:scale-105 disabled:opacity-50"
+                      >
+                        {removingId === notification.id ? 'Removing…' : 'Confirm'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmId(null)}
+                        className="rounded-full border border-secondary bg-surface px-3 py-2 text-xs font-black uppercase tracking-[0.2em] text-textMuted transition-all duration-200 hover:text-bone"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmId(notification.id)}
+                      className="rounded-full border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs font-black uppercase tracking-[0.2em] text-red-200 transition-all duration-200 hover:scale-105"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function TeamManagementTab({
   teams,
   newTeam,
@@ -1243,11 +1768,17 @@ function TeamRowEditor({ team, onRefresh }: { team: Team; onRefresh: () => Promi
 function UpcomingMatchEditor({ match, teams, onRefresh }: { match: EnrichedMatch; teams: Team[]; onRefresh: () => Promise<unknown> }) {
   const [draft, setDraft] = useState({
     scheduled_day: match.scheduled_day,
+    scheduled_date: match.scheduled_date || '',
     team1_id: match.team1_id,
     team2_id: match.team2_id,
     team3_id: match.team3_id || '',
     team4_id: match.team4_id || ''
   });
+
+  // The fixed day→date fallback, shown as the date input's placeholder/default so
+  // it's obvious what date the match has when no override is set.
+  const defaultDateIso = getScheduledDate(draft.scheduled_day);
+  const defaultDateValue = defaultDateIso ? defaultDateIso.slice(0, 10) : '';
 
   async function save() {
     await postAction({
@@ -1255,6 +1786,8 @@ function UpcomingMatchEditor({ match, teams, onRefresh }: { match: EnrichedMatch
       matchId: match.id,
       payload: {
         scheduled_day: draft.scheduled_day,
+        // Empty string = clear the override and fall back to the day mapping.
+        scheduled_date: draft.scheduled_date || null,
         team1_id: draft.team1_id,
         team2_id: draft.team2_id,
         team3_id: draft.team3_id || null,
@@ -1277,8 +1810,40 @@ function UpcomingMatchEditor({ match, teams, onRefresh }: { match: EnrichedMatch
           Save
         </button>
       </div>
-      <div className="mt-4 grid gap-2 md:grid-cols-5">
-        <input type="number" value={draft.scheduled_day} onChange={(event) => setDraft((current) => ({ ...current, scheduled_day: Number(event.target.value) }))} className="rounded-xl border border-secondary bg-primary px-3 py-2 text-sm text-slate-100" />
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <label className="text-[10px] font-bold uppercase tracking-[0.18em] text-textMuted">
+          Day
+          <input
+            type="number"
+            min={1}
+            value={draft.scheduled_day}
+            onChange={(event) => setDraft((current) => ({ ...current, scheduled_day: Number(event.target.value) }))}
+            className="mt-1 block w-full rounded-xl border border-secondary bg-primary px-3 py-2 text-sm text-slate-100"
+          />
+        </label>
+        <label className="text-[10px] font-bold uppercase tracking-[0.18em] text-textMuted">
+          Date{draft.scheduled_date ? '' : ' (using Day default)'}
+          <div className="mt-1 flex items-center gap-2">
+            <input
+              type="date"
+              value={draft.scheduled_date || defaultDateValue}
+              onChange={(event) => setDraft((current) => ({ ...current, scheduled_date: event.target.value }))}
+              className="block w-full rounded-xl border border-secondary bg-primary px-3 py-2 text-sm text-slate-100"
+            />
+            {draft.scheduled_date ? (
+              <button
+                type="button"
+                onClick={() => setDraft((current) => ({ ...current, scheduled_date: '' }))}
+                title="Clear override — revert to the Day's default date"
+                className="shrink-0 rounded-xl border border-secondary bg-primary px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-textMuted transition-all duration-200 hover:scale-105 hover:text-slate-100"
+              >
+                Reset
+              </button>
+            ) : null}
+          </div>
+        </label>
+      </div>
+      <div className="mt-3 grid gap-2 md:grid-cols-4">
         {(['team1_id', 'team2_id', 'team3_id', 'team4_id'] as const).map((field) => (
           <select key={field} value={draft[field]} onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))} className="rounded-xl border border-secondary bg-primary px-3 py-2 text-sm text-slate-100">
             <option value="">{field.toUpperCase()}</option>

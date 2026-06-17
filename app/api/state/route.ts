@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseServerReadOnlyClient } from '@/lib/supabase';
 import { displayPlayerName } from '@/lib/tournament-utils';
-import type { AppSettings, EnrichedMatch, Match, Team, TournamentData } from '@/types/tournament';
+import type { AppSettings, EnrichedMatch, Match, Notification, Team, TournamentData } from '@/types/tournament';
 
 export async function GET() {
   try {
@@ -28,6 +28,23 @@ export async function GET() {
       settingsRow = result.data ?? null;
     } catch {
       // Table not yet created — fall back to auto (null override).
+    }
+
+    // notifications is also a post-launch table — fetch it defensively so a
+    // missing table (before the SQL migration) never breaks the read path.
+    // We return ALL rows (active and inactive): the public banner filters to
+    // `active` itself (notification-banner.tsx), while the admin panel needs the
+    // inactive ones so it can re-activate a hidden notice.
+    let notificationRows: Notification[] = [];
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (supabase as any)
+        .from('notifications')
+        .select('*')
+        .order('created_at', { ascending: false });
+      notificationRows = (result.data ?? []) as Notification[];
+    } catch {
+      // Table not yet created — no announcements.
     }
 
     if (teamsError) {
@@ -67,7 +84,7 @@ export async function GET() {
       currentDayOverride: settingsRow?.current_day_override ?? null
     };
 
-    const data: TournamentData = { teams: teamRows, matches: enrichedMatches, settings };
+    const data: TournamentData = { teams: teamRows, matches: enrichedMatches, settings, notifications: notificationRows };
     return NextResponse.json(data);
   } catch (err) {
     console.error('Unexpected state API error:', err);

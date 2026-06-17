@@ -99,10 +99,17 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => {
         refresh().catch((err) => setError(err instanceof Error ? err.message : 'Something went wrong.'));
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => {
+        refresh().catch((err) => setError(err instanceof Error ? err.message : 'Something went wrong.'));
+      })
       .subscribe((status) => {
         if (!active) return;
         if (status === 'SUBSCRIBED') {
           setStatus('live');
+          // Self-heal a failed/timed-out initial load: once realtime is live the
+          // safety poll is skipped, so pull fresh data here to clear any error
+          // and guarantee viewers never get stuck on the timeout screen.
+          refresh().catch(() => {});
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
           setStatus('offline');
         } else {

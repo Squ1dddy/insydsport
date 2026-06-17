@@ -5,12 +5,13 @@ import { useTournament } from '@/components/tournament-provider';
 import { MatchCard } from '@/components/match-card';
 import { JuniorStandings } from '@/components/junior-standings';
 import { NextTermSection } from '@/components/next-term-section';
-import { displayTeamName, formatAestDate, matchTeamsLabel, getScheduledDate, matchLabel, roundLabel, getCurrentScheduledDay } from '@/lib/tournament-utils';
+import { displayTeamName, formatAestDate, matchTeamsLabel, getScheduledDate, getMatchDate, matchLabel, roundLabel, getCurrentScheduledDay } from '@/lib/tournament-utils';
 import type { BracketName } from '@/types/tournament';
 import { Skeleton } from '@/components/ui/skeleton';
 import { motion } from 'framer-motion';
 import { TypewriterTagline } from '@/components/typewriter-tagline';
 import { WinnersBanner } from '@/components/winners-banner';
+import { NotificationBanner } from '@/components/notification-banner';
 import { AnimatedScore } from '@/components/animated-score';
 
 export default function HomePage() {
@@ -21,14 +22,19 @@ export default function HomePage() {
     // Exclude Year 11 (next term) from the current schedule — it has its own toggle.
     const matches = (data?.matches || []).filter((m) => m.bracket === activeBracket && !m.is_next_term);
 
-    // Current day: admin override wins; otherwise derive from today's AEST date
-    // so the home page advances automatically each week without manual intervention.
-    const day = data?.settings?.currentDayOverride ?? getCurrentScheduledDay();
+    // Current day: admin override wins; otherwise derive from today's AEST date —
+    // aware of per-match date overrides — so the home page advances automatically
+    // and reflects any rescheduled matches without manual intervention.
+    const day = data?.settings?.currentDayOverride ?? getCurrentScheduledDay(data?.matches || []);
+
+    const todayMatches = matches.filter((match) => match.scheduled_day === day).sort((a, b) => a.match_number - b.match_number);
 
     return {
       currentDay: day,
-      currentDayDate: getScheduledDate(day),
-      todayMatches: matches.filter((match) => match.scheduled_day === day).sort((a, b) => a.match_number - b.match_number),
+      // Header date follows any per-match override the day's matches share, so a
+      // rescheduled Day stays in sync; otherwise the fixed day→date mapping.
+      currentDayDate: (todayMatches[0] ? getMatchDate(todayMatches[0]) : null) ?? getScheduledDate(day),
+      todayMatches,
       upcomingMatches: matches.filter((match) => match.scheduled_day > day).sort((a, b) => a.scheduled_day - b.scheduled_day || a.match_number - b.match_number)
     };
   }, [data, activeBracket]);
@@ -64,6 +70,10 @@ export default function HomePage() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-10">
+      {/* Admin-posted announcements — dismissible per device, persist until the
+          viewer closes them or an admin deactivates/removes them. */}
+      <NotificationBanner notifications={data?.notifications || []} />
+
       {/* Previous-day winners banner — stays for 24 h after the first senior result
           of the day so anyone tuning in late can see who advanced. Accumulates as
           each match on the day completes; both sets vanish together at the 24 h mark. */}
