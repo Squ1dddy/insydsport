@@ -13,6 +13,7 @@ import { TypewriterTagline } from '@/components/typewriter-tagline';
 import { WinnersBanner } from '@/components/winners-banner';
 import { NotificationBanner } from '@/components/notification-banner';
 import { AnimatedScore } from '@/components/animated-score';
+import { TeacherBadge } from '@/components/teacher-badge';
 
 export default function HomePage() {
   const { data, loading, error } = useTournament();
@@ -130,8 +131,9 @@ export default function HomePage() {
                         Adv
                       </span>
                     ) : null}
-                    <p className="truncate font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-ash">
+                    <p className="flex items-center justify-center gap-1.5 truncate font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-ash">
                       {displayTeamName(team!.name)}
+                      <TeacherBadge team={team} />
                     </p>
                     <div className="mt-1">
                       <AnimatedScore score={score} className={`digits font-display text-4xl leading-none ${advancing ? 'text-volt' : 'text-bone'}`} />
@@ -243,11 +245,16 @@ export default function HomePage() {
                         className="group flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface/60 px-5 py-4 transition-colors duration-200 hover:border-volt/30 hover:bg-surface"
                       >
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-bold text-bone">
+                          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-bold text-bone">
                             {[match.team1, match.team2, match.team3, match.team4]
-                              .filter(Boolean)
-                              .map((team) => displayTeamName(team!.name))
-                              .join('  ·  ')}
+                              .filter((team): team is NonNullable<typeof team> => Boolean(team))
+                              .map((team, idx, arr) => (
+                                <span key={team.id} className="inline-flex items-center gap-1.5">
+                                  {displayTeamName(team.name)}
+                                  <TeacherBadge team={team} />
+                                  {idx < arr.length - 1 ? <span className="text-ash">·</span> : null}
+                                </span>
+                              ))}
                           </p>
                           <p className="mt-1 truncate font-mono text-[10px] uppercase tracking-[0.2em] text-ash">{matchLabel(match)}</p>
                         </div>

@@ -5,6 +5,7 @@ import type { EnrichedMatch } from '@/types/tournament';
 import { displayTeamName, matchLabel, roundLabel, teamBadgeClass, winnerIdsForMatch } from '@/lib/tournament-utils';
 import { TeamTooltip } from '@/components/team-tooltip';
 import { FollowButton } from '@/components/follow-button';
+import { TeacherBadge } from '@/components/teacher-badge';
 
 function TeamRow({
   team,
@@ -72,7 +73,10 @@ function TeamRow({
           aria-expanded={rosterOpen}
           className={`text-left leading-tight transition ${teamBadgeClass(team, winnerIds)}`}
         >
-          <span className="block font-bold tracking-tight">{displayTeamName(team.name)}</span>
+          <span className="flex items-center gap-1.5 font-bold tracking-tight">
+            {displayTeamName(team.name)}
+            <TeacherBadge team={team} />
+          </span>
           <span className="mt-0.5 block font-mono text-[10px] uppercase tracking-[0.2em] text-ash transition-colors group-hover:text-gold">{team.year_group} · roster {rosterOpen ? '▴' : '▾'}</span>
         </button>
         <div className="flex items-center gap-2">

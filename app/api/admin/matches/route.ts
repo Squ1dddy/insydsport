@@ -48,6 +48,10 @@ type ActionBody =
       teamId: string;
     }
   | {
+      action: 'delete-match';
+      matchId: string;
+    }
+  | {
       action: 'create-match';
       payload: Omit<Match, 'id' | 'scheduled_date' | 'team1_score' | 'team2_score' | 'team3_score' | 'team4_score' | 'winner1_id' | 'winner2_id' | 'played_at' | 'duration_minutes'>;
     }
@@ -321,6 +325,16 @@ export async function POST(request: Request) {
 
   if (body.action === 'create-match') {
     const { error } = await supabase.from('matches').insert(body.payload);
+    if (error) throw error;
+    return NextResponse.json({ ok: true });
+  }
+
+  // Permanently remove a match. Used to clean up wrongly-created or stray matches
+  // (e.g. an auto-spawned next-round match, or an exhibition/teacher game). Deleting
+  // a parent match does NOT roll back any next-round match its completion created —
+  // delete those separately if needed.
+  if (body.action === 'delete-match') {
+    const { error } = await supabase.from('matches').delete().eq('id', body.matchId);
     if (error) throw error;
     return NextResponse.json({ ok: true });
   }

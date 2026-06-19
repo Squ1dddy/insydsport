@@ -248,7 +248,7 @@ export interface StandingRow {
 // Equal-points teams share the same rank number.
 export function getJuniorStandings(teams: Team[]): StandingRow[] {
   const juniors = teams
-    .filter((team) => team.bracket === 'junior' && !team.is_teacher)
+    .filter((team) => team.bracket === 'junior')
     .sort(
       (a, b) =>
         b.points - a.points ||
@@ -285,7 +285,7 @@ export interface TeamStat {
 export function getTeamStats(matches: EnrichedMatch[], teams: Team[], bracket: BracketName): TeamStat[] {
   if (bracket === 'junior') {
     return teams
-      .filter((team) => team.bracket === 'junior' && !team.is_teacher)
+      .filter((team) => team.bracket === 'junior')
       .map((team) => ({
         team,
         played: team.games_played,

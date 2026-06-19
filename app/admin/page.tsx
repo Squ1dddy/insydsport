@@ -3,6 +3,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useTournament } from '@/components/tournament-provider';
 import { AdminJuniorLadder } from '@/components/admin-junior-ladder';
+import { ConfirmButton } from '@/components/confirm-button';
+import { TeacherBadge } from '@/components/teacher-badge';
 import type { BracketName, EnrichedMatch, Notification, NotificationLevel, Team } from '@/types/tournament';
 import {
   appendEvent,
@@ -356,6 +358,10 @@ function LiveScoringTab({
 }) {
   const [liveScores, setLiveScores] = useState<number[]>([0, 0, 0, 0]);
   const [scoreError, setScoreError] = useState<string | null>(null);
+  // Inline two-step confirm for Complete — replaces window.confirm, which silently
+  // returns false (so completion never fires) once a browser suppresses dialogs.
+  const [confirmingComplete, setConfirmingComplete] = useState(false);
+  const [completing, setCompleting] = useState(false);
   // Bumped whenever the backup journal changes, so the Backup Log panel re-reads.
   const [journalTick, setJournalTick] = useState(0);
   const bumpJournal = () => setJournalTick((n) => n + 1);
@@ -378,6 +384,7 @@ function LiveScoringTab({
       setLiveScores(fresh);
       liveScoresRef.current = fresh;
       setScoreError(null);
+      setConfirmingComplete(false);
       // Reset the queue and the guard for the new match.
       activeMatchId.current = selectedMatch.id;
       writeQueue.current = Promise.resolve();
@@ -491,17 +498,14 @@ function LiveScoringTab({
   const decrement = (slot: 1 | 2 | 3 | 4) => adjustScore(slot, -1);
 
   async function completeMatch() {
-    if (!selectedMatch) return;
+    if (!selectedMatch || completing) return;
 
     if (tieInfo?.tieAtCutoff && selectedWinners.length !== 2) {
-      alert('You must select EXACTLY 2 teams to advance during a tie.');
+      setScoreError('Pick EXACTLY 2 teams to advance before completing this tied match.');
       return;
     }
 
-    if (!window.confirm('Complete this match? The top 2 teams will be locked in as winners and the next-round match will be created.')) {
-      return;
-    }
-
+    setCompleting(true);
     // Journal the final scores before the write so the result is preserved even
     // if completion fails to persist.
     const journalId = journal('complete', {});
@@ -517,9 +521,12 @@ function LiveScoringTab({
     } catch (err) {
       if (journalId) markFailed(journalId, err instanceof Error ? err.message : 'Write failed');
       bumpJournal();
+      setCompleting(false);
       return;
     }
     setSelectedWinners([]);
+    setConfirmingComplete(false);
+    setCompleting(false);
     await onRefresh();
   }
 
@@ -694,21 +701,53 @@ function LiveScoringTab({
                       selectedWinners.includes(team.id) ? 'border-gold/40 bg-gold/15 text-gold' : 'border-secondary bg-primary text-slate-100'
                     }`}
                   >
-                    {displayTeamName(team.name)}
+                    <span className="inline-flex items-center gap-1.5">
+                      {displayTeamName(team.name)}
+                      <TeacherBadge team={team} />
+                    </span>
                   </button>
                 ))}
               </div>
             </div>
           ) : null}
 
-          <button
-            type="button"
-            onClick={completeMatch}
-            disabled={!selectedMatch || (tieInfo?.tieAtCutoff ? selectedWinners.length !== 2 : false)}
-            className="w-full rounded-2xl bg-emerald-500 px-6 py-4 text-sm font-black uppercase tracking-[0.26em] text-slate-100 transition-all duration-200 hover:scale-[1.01] disabled:opacity-40"
-          >
-            Complete Match
-          </button>
+          {confirmingComplete ? (
+            <div className="space-y-2">
+              <p className="text-center text-xs font-bold uppercase tracking-[0.18em] text-emerald-200">
+                Lock in the top 2 as winners and create the next-round match?
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={completeMatch}
+                  disabled={completing || !selectedMatch || (tieInfo?.tieAtCutoff ? selectedWinners.length !== 2 : false)}
+                  className="flex-1 rounded-2xl bg-emerald-500 px-6 py-4 text-sm font-black uppercase tracking-[0.26em] text-slate-100 transition-all duration-200 hover:scale-[1.01] disabled:opacity-40"
+                >
+                  {completing ? 'Completing…' : 'Confirm — Lock Winners'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingComplete(false)}
+                  disabled={completing}
+                  className="rounded-2xl border border-line bg-ink/50 px-5 py-4 text-sm font-black uppercase tracking-[0.22em] text-ash transition-all duration-200 hover:text-bone disabled:opacity-40"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setScoreError(null);
+                setConfirmingComplete(true);
+              }}
+              disabled={!selectedMatch || (tieInfo?.tieAtCutoff ? selectedWinners.length !== 2 : false)}
+              className="w-full rounded-2xl bg-emerald-500 px-6 py-4 text-sm font-black uppercase tracking-[0.26em] text-slate-100 transition-all duration-200 hover:scale-[1.01] disabled:opacity-40"
+            >
+              Complete Match
+            </button>
+          )}
         </>
       ) : (
         <div className="rounded-3xl border border-dashed border-secondary bg-primary px-4 py-10 text-center text-textMuted">No matches available to score yet.</div>
@@ -862,18 +901,16 @@ function BackupLogPanel({ tick, onChanged }: { tick: number; onChanged: () => vo
             >
               {retrying ? 'Retrying…' : `Retry unsynced (${unsynced.length})`}
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (window.confirm('Clear all SAVED entries from the backup log? Unsynced entries are kept.')) {
-                  clearSynced();
-                  onChanged();
-                }
+            <ConfirmButton
+              onConfirm={() => {
+                clearSynced();
+                onChanged();
               }}
+              confirmLabel="Clear saved?"
               className="rounded-2xl border border-line bg-ink/50 px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-ash transition-all duration-200 hover:text-bone"
             >
               Clear saved
-            </button>
+            </ConfirmButton>
           </div>
 
           <div className="mt-4 max-h-80 overflow-auto rounded-2xl border border-line">
@@ -945,6 +982,7 @@ function LiveScoreCard({
         <div className="flex items-center justify-center gap-2 text-center">
           {active ? <span className="h-1.5 w-1.5 rounded-full bg-volt animate-dotPulse" /> : null}
           <p className="truncate font-mono text-xs font-semibold uppercase tracking-[0.2em] text-bone">{team ? displayTeamName(team.name) : 'TBD'}</p>
+          <TeacherBadge team={team} />
         </div>
         <div className="flex flex-1 items-center justify-center">
           <span key={score} className={`digits font-display text-[7rem] leading-none animate-scorePop ${active ? 'text-volt' : 'text-bone'}`}>{score}</span>
@@ -1071,7 +1109,10 @@ function PastGameEditor({
           <div key={team.id} className={`rounded-2xl border px-4 py-3 ${outcome.placements.get(team.id) === 'advanced' ? 'border-gold/50 bg-gold/10' : 'border-red-500/30 bg-red-500/5'}`}>
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="font-black text-slate-100">{displayTeamName(team.name)}</p>
+                <p className="flex items-center gap-1.5 font-black text-slate-100">
+                  {displayTeamName(team.name)}
+                  <TeacherBadge team={team} />
+                </p>
                 <p className="text-xs text-textMuted">
                   {team.player1} · {team.player2}
                 </p>
@@ -1579,17 +1620,13 @@ function TeamManagementTab({
       <section className="rounded-[2rem] border border-flare/25 bg-flare/[0.04] p-5 shadow-card">
         <h2 className="font-display text-2xl uppercase tracking-wide text-flare">Danger Zone</h2>
         <div className="mt-4 flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={async () => {
-              if (window.confirm('Clear all match scores?')) {
-                await onClearScores();
-              }
-            }}
+          <ConfirmButton
+            onConfirm={onClearScores}
+            confirmLabel="Confirm — clear all scores"
             className="rounded-2xl border border-secondary bg-primary px-5 py-3 text-sm font-black uppercase tracking-[0.22em] text-slate-100 transition-all duration-200 hover:scale-105"
           >
             Clear All Scores
-          </button>
+          </ConfirmButton>
         </div>
       </section>
     </div>
@@ -1703,10 +1740,8 @@ function TeamRowEditor({ team, onRefresh }: { team: Team; onRefresh: () => Promi
   }
 
   async function remove() {
-    if (window.confirm(`Delete ${team.name}?`)) {
-      await postAction({ action: 'delete-team', teamId: team.id });
-      await onRefresh();
-    }
+    await postAction({ action: 'delete-team', teamId: team.id });
+    await onRefresh();
   }
 
   return (
@@ -1725,9 +1760,13 @@ function TeamRowEditor({ team, onRefresh }: { team: Team; onRefresh: () => Promi
           <button type="button" onClick={() => setEditing((value) => !value)} className="rounded-full border border-secondary bg-primary px-3 py-2 text-xs font-black uppercase tracking-[0.2em] text-slate-100 transition-all duration-200 hover:scale-105">
             Edit
           </button>
-          <button type="button" onClick={remove} className="rounded-full border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs font-black uppercase tracking-[0.2em] text-red-200 transition-all duration-200 hover:scale-105">
+          <ConfirmButton
+            onConfirm={remove}
+            confirmLabel="Confirm delete"
+            className="rounded-full border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs font-black uppercase tracking-[0.2em] text-red-200 transition-all duration-200 hover:scale-105"
+          >
             Delete
-          </button>
+          </ConfirmButton>
         </div>
       </div>
       {editing ? (
@@ -1797,6 +1836,11 @@ function UpcomingMatchEditor({ match, teams, onRefresh }: { match: EnrichedMatch
     await onRefresh();
   }
 
+  async function remove() {
+    await postAction({ action: 'delete-match', matchId: match.id });
+    await onRefresh();
+  }
+
   return (
     <div className="rounded-2xl border border-secondary bg-primary p-4 transition-all duration-300 hover:border-gold/30">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1806,9 +1850,18 @@ function UpcomingMatchEditor({ match, teams, onRefresh }: { match: EnrichedMatch
           </p>
           <p className="mt-2 text-sm font-black text-slate-100">{matchTeamsLabel(match)}</p>
         </div>
-        <button type="button" onClick={save} className="rounded-full border border-gold/40 bg-gold/10 px-3 py-2 text-xs font-black uppercase tracking-[0.2em] text-gold transition-all duration-200 hover:scale-105">
-          Save
-        </button>
+        <div className="flex gap-2">
+          <button type="button" onClick={save} className="rounded-full border border-gold/40 bg-gold/10 px-3 py-2 text-xs font-black uppercase tracking-[0.2em] text-gold transition-all duration-200 hover:scale-105">
+            Save
+          </button>
+          <ConfirmButton
+            onConfirm={remove}
+            confirmLabel="Confirm delete"
+            className="rounded-full border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs font-black uppercase tracking-[0.2em] text-red-200 transition-all duration-200 hover:scale-105"
+          >
+            Delete
+          </ConfirmButton>
+        </div>
       </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <label className="text-[10px] font-bold uppercase tracking-[0.18em] text-textMuted">

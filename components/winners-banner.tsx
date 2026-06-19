@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getSeniorDayWinners } from '@/lib/tournament-utils';
 import { displayTeamName, formatAestDate, matchLabel } from '@/lib/tournament-utils';
+import { TeacherBadge } from '@/components/teacher-badge';
 import type { EnrichedMatch } from '@/types/tournament';
 
 interface Props {
@@ -145,6 +146,7 @@ export function WinnersBanner({ matches }: Props) {
                           <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-volt">
                             {displayTeamName(team.name)}
                           </span>
+                          <TeacherBadge team={team} />
                           <span className="rounded-full border border-volt/30 bg-ink px-1.5 py-0.5 font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-volt">
                             Adv
                           </span>

@@ -7,6 +7,7 @@ import type { BracketName, EnrichedMatch, Team } from '@/types/tournament';
 import { displayTeamName, formatAestDateTime, getMatchPlacements, matchLabel } from '@/lib/tournament-utils';
 import { motion } from 'framer-motion';
 import { FollowButton } from '@/components/follow-button';
+import { TeacherBadge } from '@/components/teacher-badge';
 
 type Filter = 'all' | BracketName | 'round';
 
@@ -139,7 +140,10 @@ function HistoryTeamCard({
       {isAdvanced ? <span className="absolute inset-y-0 left-0 w-1 bg-volt" aria-hidden /> : null}
       <div className="flex items-start justify-between gap-4 pl-1.5">
         <div className="min-w-0">
-          <p className={`break-words text-sm font-bold leading-tight ${isAdvanced ? 'text-volt' : 'text-bone'}`}>{displayTeamName(team.name)}</p>
+          <p className={`flex flex-wrap items-center gap-1.5 break-words text-sm font-bold leading-tight ${isAdvanced ? 'text-volt' : 'text-bone'}`}>
+            {displayTeamName(team.name)}
+            <TeacherBadge team={team} />
+          </p>
           <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-ash">
             {team.player1} · {team.player2}
           </p>

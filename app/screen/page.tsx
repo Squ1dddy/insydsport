@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useTournament } from '@/components/tournament-provider';
 import { AnimatedScore } from '@/components/animated-score';
 import { displayTeamName, matchLabel, roundLabel } from '@/lib/tournament-utils';
+import { TeacherBadge } from '@/components/teacher-badge';
 import type { EnrichedMatch } from '@/types/tournament';
 
 // Big-screen / TV mode — a full-bleed live view for projecting at the venue.
@@ -93,6 +94,7 @@ function LiveScreen({ match }: { match: EnrichedMatch }) {
               <p className="max-w-full truncate font-display text-3xl uppercase leading-tight tracking-wide text-bone sm:text-4xl md:text-6xl lg:text-7xl">
                 {displayTeamName(team!.name)}
               </p>
+              <TeacherBadge team={team} className="mt-2 px-2.5 py-1 text-[10px] md:text-xs" />
               <div className="mt-2">
                 <AnimatedScore
                   score={score}
@@ -123,11 +125,16 @@ function IdleScreen({ upcoming }: { upcoming: EnrichedMatch[] }) {
           <p className="font-mono text-xs uppercase tracking-[0.3em] text-volt">Coming up</p>
           {upcoming.map((match) => (
             <div key={match.id} className="flex items-center justify-between gap-4 rounded-2xl border border-line bg-ink/50 px-5 py-3 text-left">
-              <span className="truncate font-display text-lg uppercase tracking-wide text-bone md:text-xl">
+              <span className="flex flex-wrap items-center gap-x-2 gap-y-1 font-display text-lg uppercase tracking-wide text-bone md:text-xl">
                 {[match.team1, match.team2, match.team3, match.team4]
-                  .filter(Boolean)
-                  .map((team) => displayTeamName(team!.name))
-                  .join('  ·  ')}
+                  .filter((team): team is NonNullable<typeof team> => Boolean(team))
+                  .map((team, idx, arr) => (
+                    <span key={team.id} className="inline-flex items-center gap-1.5">
+                      {displayTeamName(team.name)}
+                      <TeacherBadge team={team} />
+                      {idx < arr.length - 1 ? <span className="text-ash">·</span> : null}
+                    </span>
+                  ))}
               </span>
               <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.2em] text-ash md:text-xs">{roundLabel(match.bracket, match.round)}</span>
             </div>

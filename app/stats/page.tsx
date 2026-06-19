@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useTournament } from '@/components/tournament-provider';
 import { displayTeamName, getTeamStats } from '@/lib/tournament-utils';
+import { TeacherBadge } from '@/components/teacher-badge';
 import type { BracketName } from '@/types/tournament';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FollowButton } from '@/components/follow-button';
@@ -47,7 +48,7 @@ export default function StatsPage() {
   // Crowd favourite: the team in this bracket with the most stars (any team, not
   // just ones that have played).
   const mostFavourited = useMemo(() => {
-    const teams = (data?.teams || []).filter((t) => t.bracket === activeBracket && !t.is_teacher && t.star_count > 0);
+    const teams = (data?.teams || []).filter((t) => t.bracket === activeBracket && t.star_count > 0);
     return teams.length ? [...teams].sort((a, b) => b.star_count - a.star_count)[0] : null;
   }, [data, activeBracket]);
 
@@ -94,6 +95,7 @@ export default function StatsPage() {
               >
                 <FollowButton teamId={team.id} teamName={team.name} />
                 {displayTeamName(team.name)}
+                <TeacherBadge team={team} />
                 <span className="font-mono text-[10px] font-semibold text-gold">★ {team.star_count}</span>
               </span>
             ))}
@@ -168,6 +170,7 @@ export default function StatsPage() {
                         <div className="flex items-center gap-2">
                           <FollowButton teamId={row.team.id} teamName={row.team.name} />
                           <span className="font-bold text-bone">{displayTeamName(row.team.name)}</span>
+                          <TeacherBadge team={row.team} />
                         </div>
                       </td>
                       <td className="px-3 py-3 text-right font-mono text-sm text-ash">{row.played}</td>

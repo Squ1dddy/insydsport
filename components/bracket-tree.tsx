@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { BracketName, EnrichedMatch, Team } from '@/types/tournament';
 import { displayTeamName, roundLabel, winnerIdsForMatch } from '@/lib/tournament-utils';
+import { TeacherBadge } from '@/components/teacher-badge';
 
 const roundCounts: Record<BracketName, number> = {
   senior: 5,
@@ -36,12 +37,15 @@ function TeamLine({ match, team, score }: { match: EnrichedMatch; team?: Team | 
       }`}
     >
       {advanced ? <span className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-volt" aria-hidden /> : null}
-      <span
-        className={`min-w-0 break-words pl-1.5 text-[12px] font-bold leading-tight ${
-          advanced ? 'text-volt' : eliminated ? 'text-eliminated line-through decoration-eliminated/60' : 'text-bone'
-        }`}
-      >
-        {displayTeamName(team.name)}
+      <span className="flex min-w-0 items-center gap-1.5 pl-1.5">
+        <span
+          className={`min-w-0 break-words text-[12px] font-bold leading-tight ${
+            advanced ? 'text-volt' : eliminated ? 'text-eliminated line-through decoration-eliminated/60' : 'text-bone'
+          }`}
+        >
+          {displayTeamName(team.name)}
+        </span>
+        <TeacherBadge team={team} />
       </span>
       <div className="flex shrink-0 items-center gap-1.5">
         <span className={`digits font-display text-base leading-none ${advanced ? 'text-volt' : eliminated ? 'text-eliminated' : 'text-bone'}`}>{score}</span>

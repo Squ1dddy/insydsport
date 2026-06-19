@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import type { Team } from '@/types/tournament';
 import { displayTeamName, getJuniorStandings, yearGroupOf } from '@/lib/tournament-utils';
 import { FollowButton } from '@/components/follow-button';
+import { TeacherBadge } from '@/components/teacher-badge';
 
 const YEAR_ORDER = ['Year 7', 'Year 8', 'Year 9', 'Year 10', 'Year 7-10'];
 
@@ -14,7 +15,7 @@ const YEAR_ORDER = ['Year 7', 'Year 8', 'Year 9', 'Year 10', 'Year 7-10'];
 export function JuniorStandings({ teams }: { teams: Team[] }) {
   const [year, setYear] = useState<string>('all');
 
-  const juniorTeams = useMemo(() => teams.filter((team) => team.bracket === 'junior' && !team.is_teacher), [teams]);
+  const juniorTeams = useMemo(() => teams.filter((team) => team.bracket === 'junior'), [teams]);
 
   const years = useMemo(() => {
     const set = new Set(juniorTeams.map(yearGroupOf));
@@ -78,6 +79,7 @@ export function JuniorStandings({ teams }: { teams: Team[] }) {
                   <div className="min-w-0">
                     <p className={`flex items-center gap-2 truncate text-sm font-bold leading-tight ${leader ? 'text-volt' : 'text-bone'}`}>
                       <span className="truncate">{displayTeamName(team.name)}</span>
+                      <TeacherBadge team={team} />
                       <span className="shrink-0 rounded border border-line bg-ink/60 px-1.5 py-0.5 font-mono text-[8px] font-semibold uppercase tracking-[0.14em] text-ash">
                         {yearGroupOf(team).replace('Year ', 'Yr ')}
                       </span>
