@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useTournament } from '@/components/tournament-provider';
 import { AnimatedScore } from '@/components/animated-score';
-import { displayTeamName, matchLabel, roundLabel } from '@/lib/tournament-utils';
+import { advanceCount, displayTeamName, isGrandFinal, matchLabel, roundLabel } from '@/lib/tournament-utils';
 import { TeacherBadge } from '@/components/teacher-badge';
 import type { EnrichedMatch } from '@/types/tournament';
 
@@ -26,9 +26,10 @@ function teamEntries(match: EnrichedMatch) {
 }
 
 function advancingIds(match: EnrichedMatch): string[] {
-  return [...teamEntries(match)]
+  const entries = teamEntries(match);
+  return [...entries]
     .sort((a, b) => b.score - a.score)
-    .slice(0, 2)
+    .slice(0, advanceCount(entries.length))
     .filter((entry) => entry.score > 0)
     .map((entry) => entry.team!.id);
 }
@@ -67,7 +68,7 @@ function LiveScreen({ match }: { match: EnrichedMatch }) {
           On Air · {match.bracket}s
         </span>
         <div className="text-right">
-          <p className="font-display text-2xl uppercase leading-none tracking-wide text-bone md:text-4xl">{roundLabel(match.bracket, match.round)}</p>
+          <p className="font-display text-2xl uppercase leading-none tracking-wide text-bone md:text-4xl">{roundLabel(match.bracket, match.round, match.series)}</p>
           <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.22em] text-ash md:text-xs">{matchLabel(match)}</p>
         </div>
       </div>
@@ -106,7 +107,13 @@ function LiveScreen({ match }: { match: EnrichedMatch }) {
         })}
       </div>
 
-      <p className="mt-6 text-center font-mono text-xs uppercase tracking-[0.3em] text-ash md:text-sm">Top 2 advance</p>
+      <p className="mt-6 text-center font-mono text-xs uppercase tracking-[0.3em] text-ash md:text-sm">
+        {isGrandFinal(match)
+          ? 'Winner takes the title'
+          : advanceCount(entries.length) === 1
+            ? 'Winner advances'
+            : 'Top 2 advance'}
+      </p>
     </div>
   );
 }
@@ -136,7 +143,7 @@ function IdleScreen({ upcoming }: { upcoming: EnrichedMatch[] }) {
                     </span>
                   ))}
               </span>
-              <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.2em] text-ash md:text-xs">{roundLabel(match.bracket, match.round)}</span>
+              <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.2em] text-ash md:text-xs">{roundLabel(match.bracket, match.round, match.series)}</span>
             </div>
           ))}
         </div>
@@ -159,7 +166,9 @@ export default function ScreenPage() {
   const upcoming = useMemo(
     () =>
       (data?.matches || [])
-        .filter((match) => match.status === 'upcoming' && !match.is_next_term)
+        // Year 11 fixtures are included: with the Year 12 series concluded they are
+        // the senior games actually still to come, so the big screen must show them.
+        .filter((match) => match.status === 'upcoming')
         .sort((a, b) => a.scheduled_day - b.scheduled_day || a.match_number - b.match_number)
         .slice(0, 4),
     [data]

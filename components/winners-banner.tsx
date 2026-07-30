@@ -3,23 +3,27 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getSeniorDayWinners } from '@/lib/tournament-utils';
-import { displayTeamName, formatAestDate, matchLabel } from '@/lib/tournament-utils';
+import { displayTeamName, formatAestDate, matchLabel, roundLabel } from '@/lib/tournament-utils';
 import { TeacherBadge } from '@/components/teacher-badge';
-import type { EnrichedMatch } from '@/types/tournament';
+import type { EnrichedMatch, SeniorSeries } from '@/types/tournament';
 
 interface Props {
   matches: EnrichedMatch[];
+  /** Which senior series to report on. Only one runs at a time, so the home page
+   *  points this at whichever that is. */
+  series?: SeniorSeries;
 }
 
-export function WinnersBanner({ matches }: Props) {
+export function WinnersBanner({ matches, series = 'year12' }: Props) {
   const [now, setNow] = useState(() => Date.now());
   const [collapsed, setCollapsed] = useState(false);
   const expireTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const banner = getSeniorDayWinners(matches, now);
+  const banner = getSeniorDayWinners(matches, now, series);
 
-  // Persist collapsed state per day so each new day starts expanded.
-  const storageKey = banner ? `winnersBanner:collapsed:day${banner.day}` : null;
+  // Persist collapsed state per day so each new day starts expanded. Keyed by
+  // series too — the series number their days independently.
+  const storageKey = banner ? `winnersBanner:collapsed:${series}:day${banner.day}` : null;
 
   // Read initial collapsed state from localStorage once the banner mounts.
   useEffect(() => {
@@ -49,6 +53,10 @@ export function WinnersBanner({ matches }: Props) {
   if (!banner) return null;
 
   const totalWinners = banner.entries.reduce((n, e) => n + e.winners.length, 0);
+  // Year 11 carries no day→date mapping, so "Day 6" would be meaningless to a
+  // viewer — label that series by round, and say TBC when no date is set yet.
+  const scopeLabel = banner.series === 'year12' ? `Day ${banner.day}` : roundLabel('senior', banner.round, banner.series);
+  const dateLabel = banner.dateIso ? formatAestDate(banner.dateIso) : 'Date TBC';
 
   function toggleCollapsed() {
     const next = !collapsed;
@@ -90,16 +98,14 @@ export function WinnersBanner({ matches }: Props) {
           </span>
           <div>
             <p className="font-mono text-[10px] font-bold uppercase tracking-[0.28em] text-volt">
-              Results · Day {banner.day}
+              Results · {scopeLabel}
             </p>
             {collapsed ? (
               <p className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.18em] text-ash">
-                {totalWinners} team{totalWinners !== 1 ? 's' : ''} advancing · {formatAestDate(banner.dateIso)}
+                {totalWinners} team{totalWinners !== 1 ? 's' : ''} advancing · {dateLabel}
               </p>
             ) : (
-              <p className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.18em] text-ash">
-                {formatAestDate(banner.dateIso)}
-              </p>
+              <p className="mt-0.5 font-mono text-[11px] uppercase tracking-[0.18em] text-ash">{dateLabel}</p>
             )}
           </div>
         </div>

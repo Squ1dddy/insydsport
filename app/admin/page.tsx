@@ -5,7 +5,11 @@ import { useTournament } from '@/components/tournament-provider';
 import { AdminJuniorLadder } from '@/components/admin-junior-ladder';
 import { ConfirmButton } from '@/components/confirm-button';
 import { TeacherBadge } from '@/components/teacher-badge';
-import type { BracketName, EnrichedMatch, Notification, NotificationLevel, Team } from '@/types/tournament';
+import type { BracketName, EnrichedMatch, Notification, NotificationLevel, SeniorSeries, Team } from '@/types/tournament';
+
+// Each senior series owns a match-number band so numbers never collide across the
+// three series sharing the bracket. Year 12 starts at 1, Year 11 at 101, Teachers 201.
+const SERIES_NUMBER_BASE: Record<SeniorSeries, number> = { year12: 0, year11: 100, teacher: 200 };
 import {
   appendEvent,
   clearSynced,
@@ -17,6 +21,10 @@ import {
   type JournalEntry
 } from '@/lib/score-journal';
 import {
+  advanceCount,
+  SENIOR_SERIES,
+  seriesLabel,
+  totalRoundsFor,
   displayTeamName,
   formatAestDateTime,
   getMatchPlacements,
@@ -397,13 +405,16 @@ function LiveScoringTab({
     : null;
   const tieInfo = displayMatch ? getMatchPlacements(displayMatch) : null;
   const liveTeams = [selectedMatch?.team1, selectedMatch?.team2, selectedMatch?.team3, selectedMatch?.team4].filter(Boolean) as Team[];
+  // How many teams come out of THIS match — 1 for a 1v1, 2 otherwise. Drives the
+  // confirm copy and how many picks a tie-break requires.
+  const liveAdvanceCount = advanceCount(liveTeams.length);
 
   // Day buttons are derived from the schedule, not hardcoded: always at least
   // 1-5, and extending automatically as matches are created on higher days
   // (next-term Year 11 matches are excluded — they have their own section).
   const scheduledDays = useMemo(() => {
     const maxDay = [...liveMatches, ...upcomingMatches, ...completedMatches]
-      .filter((match) => !match.is_next_term)
+      .filter((match) => match.series === 'year12')
       .reduce((max, match) => Math.max(max, match.scheduled_day), 5);
     return Array.from({ length: maxDay }, (_, index) => index + 1);
   }, [liveMatches, upcomingMatches, completedMatches]);
@@ -714,13 +725,15 @@ function LiveScoringTab({
           {confirmingComplete ? (
             <div className="space-y-2">
               <p className="text-center text-xs font-bold uppercase tracking-[0.18em] text-emerald-200">
-                Lock in the top 2 as winners and create the next-round match?
+                {liveAdvanceCount === 1
+                  ? 'Lock in the winner and create the next-round match?'
+                  : `Lock in the top ${liveAdvanceCount} as winners and create the next-round match?`}
               </p>
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={completeMatch}
-                  disabled={completing || !selectedMatch || (tieInfo?.tieAtCutoff ? selectedWinners.length !== 2 : false)}
+                  disabled={completing || !selectedMatch || (tieInfo?.tieAtCutoff ? selectedWinners.length !== liveAdvanceCount : false)}
                   className="flex-1 rounded-2xl bg-emerald-500 px-6 py-4 text-sm font-black uppercase tracking-[0.26em] text-slate-100 transition-all duration-200 hover:scale-[1.01] disabled:opacity-40"
                 >
                   {completing ? 'Completing…' : 'Confirm — Lock Winners'}
@@ -1065,8 +1078,11 @@ function PastGameEditor({
     const manualAdvanced = placements
       .map((choice, index) => (choice === 'advanced' ? teams[index]?.id : null))
       .filter(Boolean) as string[];
+    // A manual override only counts once the admin has picked exactly as many
+    // teams as actually advance — 1 in a 1v1, 2 otherwise. Otherwise fall back to
+    // the score-derived placements.
     const winnerIds =
-      manualAdvanced.length === 2
+      manualAdvanced.length === advanceCount(teams.length)
         ? manualAdvanced
         : Array.from(outcome.placements.entries())
             .filter(([, state]) => state === 'advanced')
@@ -1173,7 +1189,13 @@ function MatchesTab({ matches, teams, onRefresh }: { matches: EnrichedMatch[]; t
   // Show all upcoming matches; current-term first, then Year 11 (next term).
   const upcomingMatches = matches
     .filter((match) => match.status === 'upcoming')
-    .sort((a, b) => Number(a.is_next_term) - Number(b.is_next_term) || a.scheduled_day - b.scheduled_day || a.match_number - b.match_number);
+    // Live series (Year 11) first, then the concluded ones.
+    .sort(
+      (a, b) =>
+        SENIOR_SERIES.indexOf(a.series) - SENIOR_SERIES.indexOf(b.series) ||
+        a.scheduled_day - b.scheduled_day ||
+        a.match_number - b.match_number
+    );
 
   return (
     <div className="space-y-6">
@@ -1198,7 +1220,7 @@ function MatchesTab({ matches, teams, onRefresh }: { matches: EnrichedMatch[]; t
 function CreateMatchForm({ matches, teams, onRefresh }: { matches: EnrichedMatch[]; teams: Team[]; onRefresh: () => Promise<unknown> }) {
   const [scheduledDay, setScheduledDay] = useState(1);
   const [round, setRound] = useState(1);
-  const [isNextTerm, setIsNextTerm] = useState(false);
+  const [series, setSeries] = useState<SeniorSeries>('year11');
   const [isSkillStretch, setIsSkillStretch] = useState(false);
   const [slots, setSlots] = useState<string[]>(['', '', '', '']);
   const [error, setError] = useState<string | null>(null);
@@ -1256,12 +1278,13 @@ function CreateMatchForm({ matches, teams, onRefresh }: { matches: EnrichedMatch
       return;
     }
 
-    // Auto-assign a non-colliding match number. Next-term matches live in the 100+
-    // band so they never clash with the current-term Year 12 fixtures.
-    const base = isNextTerm ? 100 : 0;
+    // Auto-assign a non-colliding match number. Each series owns a numbering band
+    // (Year 12 from 1, Year 11 from 101, Teachers from 201) so numbers never clash
+    // across the three series that share the senior bracket.
+    const base = SERIES_NUMBER_BASE[series];
     const matchNumber =
       matches
-        .filter((match) => match.bracket === 'senior' && match.round === round && match.is_next_term === isNextTerm)
+        .filter((match) => match.bracket === 'senior' && match.round === round && match.series === series)
         .reduce((max, match) => Math.max(max, match.match_number), base) + 1;
 
     setBusy(true);
@@ -1272,14 +1295,17 @@ function CreateMatchForm({ matches, teams, onRefresh }: { matches: EnrichedMatch
           bracket: 'senior',
           round,
           match_number: matchNumber,
-          scheduled_day: isNextTerm ? 6 : scheduledDay,
+          // Only Year 12 uses the fixed day→date mapping; the other series are
+          // date-driven, so they get a nominal day outside the 1-5 range.
+          scheduled_day: series === 'year12' ? scheduledDay : 6,
           team1_id: slots[0],
           team2_id: slots[1],
           team3_id: slots[2] || null,
           team4_id: slots[3] || null,
           status: 'upcoming',
           is_skill_stretch: isSkillStretch,
-          is_next_term: isNextTerm
+          is_next_term: series === 'year11',
+          series
         }
       });
       setSlots(['', '', '', '']);
@@ -1342,7 +1368,7 @@ function CreateMatchForm({ matches, teams, onRefresh }: { matches: EnrichedMatch
             className="mt-1 block w-24 rounded-xl border border-secondary bg-primary px-3 py-2 text-sm text-slate-100"
           />
         </label>
-        {!isNextTerm ? (
+        {series === 'year12' ? (
           <label className="text-xs font-bold uppercase tracking-[0.18em] text-textMuted">
             Scheduled day
             <input
@@ -1354,15 +1380,29 @@ function CreateMatchForm({ matches, teams, onRefresh }: { matches: EnrichedMatch
             />
           </label>
         ) : null}
+        <label className="text-xs font-bold uppercase tracking-[0.18em] text-textMuted">
+          Series
+          <select
+            value={series}
+            onChange={(event) => setSeries(event.target.value as SeniorSeries)}
+            className="mt-1 block rounded-xl border border-secondary bg-primary px-3 py-2 text-sm text-slate-100 outline-none focus:border-gold"
+          >
+            {SENIOR_SERIES.map((item) => (
+              <option key={item} value={item}>
+                {seriesLabel(item)}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-textMuted">
           <input type="checkbox" checked={isSkillStretch} onChange={(event) => setIsSkillStretch(event.target.checked)} className="h-4 w-4 accent-gold" />
           Skill stretch
         </label>
-        <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-textMuted">
-          <input type="checkbox" checked={isNextTerm} onChange={(event) => setIsNextTerm(event.target.checked)} className="h-4 w-4 accent-gold" />
-          TBD next term (Year 11)
-        </label>
       </div>
+      <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.16em] text-textMuted">
+        {seriesLabel(series)} · {totalRoundsFor('senior', series)} rounds · numbers from {SERIES_NUMBER_BASE[series] + 1}
+        {series === 'year12' ? '' : ' · date entered per match (shows “Date TBC” until then)'}
+      </p>
 
       {error ? <p className="mt-3 text-sm font-bold text-flare">{error}</p> : null}
 

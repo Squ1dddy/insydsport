@@ -26,8 +26,12 @@ create table if not exists matches (
   -- day→date mapping (getScheduledDate) for display while the match keeps its
   -- "Day N" grouping. Null = use the day mapping.
   scheduled_date date,
-  team1_id uuid not null references teams(id) on delete cascade,
-  team2_id uuid not null references teams(id) on delete cascade,
+  -- All four slots are nullable: an unfilled bracket placeholder (a Semifinal or
+  -- Grand Final created before its qualifiers are known) has no teams yet, and the
+  -- auto-advance path writes slots 3/4 only when fed by an even-numbered parent.
+  -- The UI renders a null slot as "TBD". See supabase/year11-series.sql.
+  team1_id uuid references teams(id) on delete cascade,
+  team2_id uuid references teams(id) on delete cascade,
   team3_id uuid references teams(id) on delete cascade,
   team4_id uuid references teams(id) on delete cascade,
   team1_score int not null default 0,
@@ -40,9 +44,16 @@ create table if not exists matches (
   is_skill_stretch boolean not null default false,
   played_at timestamptz,
   duration_minutes int,
-  -- Year 11 plays next term: kept behind a "TBC Next Term" toggle, excluded from
-  -- the current schedule.
-  is_next_term boolean not null default false
+  -- Legacy two-way series flag, kept in sync with series = 'year11'. Superseded by
+  -- `series` below, which can express the third (teacher) series.
+  is_next_term boolean not null default false,
+  -- Which senior series this match belongs to. See supabase/match-series.sql.
+  --   year12  — concluded, 5 rounds (R1, R2, QF, SF, GF). Champion: Bessintown.
+  --   year11  — running, 3 rounds. The front-page schedule.
+  --   teacher — concluded, 2 rounds. Staff teams; champion: Demolition Men.
+  -- Each series owns a match_number band (year12 from 1, year11 101, teacher 201)
+  -- so numbers never collide inside the shared senior bracket.
+  series text not null default 'year12' check (series in ('year12', 'year11', 'teacher'))
 );
 
 -- Admin-posted announcements shown as dismissible banners on the home page.
@@ -57,6 +68,7 @@ create table if not exists notifications (
 );
 
 create index if not exists matches_status_idx on matches(status);
+create index if not exists matches_series_idx on matches(bracket, series, round, match_number);
 create index if not exists matches_bracket_round_idx on matches(bracket, round, match_number);
 create index if not exists teams_bracket_idx on teams(bracket, status);
 

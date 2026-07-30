@@ -56,13 +56,13 @@ export function FollowNotifier() {
       const names = followedHere.map((team) => displayTeamName(team.name)).join(', ');
 
       if (match.status === 'live') {
-        notify(`${names} is now LIVE`, `${roundLabel(match.bracket, match.round)} · ${matchTeamsLabel(match)}`, `live-${match.id}`);
+        notify(`${names} is now LIVE`, `${roundLabel(match.bracket, match.round, match.series)} · ${matchTeamsLabel(match)}`, `live-${match.id}`);
       } else if (match.status === 'completed') {
         const winners = winnerIdsFor(match);
         const advanced = followedHere.some((team) => winners.includes(team.id));
         notify(
           advanced ? `${names} advanced! 🎉` : `${names} — match finished`,
-          `${roundLabel(match.bracket, match.round)} · ${matchTeamsLabel(match)}`,
+          `${roundLabel(match.bracket, match.round, match.series)} · ${matchTeamsLabel(match)}`,
           `done-${match.id}`
         );
       }

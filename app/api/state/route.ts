@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseServerReadOnlyClient } from '@/lib/supabase';
 import { displayPlayerName } from '@/lib/tournament-utils';
-import type { AppSettings, EnrichedMatch, Match, Notification, Team, TournamentData } from '@/types/tournament';
+import type { AppSettings, EnrichedMatch, Match, Notification, SeniorSeries, Team, TournamentData } from '@/types/tournament';
 
 export async function GET() {
   try {
@@ -70,10 +70,24 @@ export async function GET() {
     const matchRows = (matches || []) as Match[];
     const teamMap = new Map(teamRows.map((team) => [team.id, team]));
 
+    // `series` is the authoritative senior-series column (supabase/match-series.sql).
+    // It is filled in here when absent so the app is identical before and after that
+    // migration is run: `is_next_term` still identifies Year 11, and a match whose
+    // every team is a staff team is the teacher series. Juniors are always 'year12'
+    // by default and simply never consult it.
+    const deriveSeries = (match: Match): SeniorSeries => {
+      if (match.series) return match.series;
+      if (match.is_next_term) return 'year11';
+      const slots = [match.team1_id, match.team2_id, match.team3_id, match.team4_id].filter(Boolean) as string[];
+      const allTeacher = slots.length > 0 && slots.every((id) => teamMap.get(id)?.is_teacher);
+      return match.bracket === 'senior' && allTeacher ? 'teacher' : 'year12';
+    };
+
     const enrichedMatches: EnrichedMatch[] = matchRows.map((match) => ({
       ...match,
-      team1: teamMap.get(match.team1_id) || null,
-      team2: teamMap.get(match.team2_id) || null,
+      series: deriveSeries(match),
+      team1: match.team1_id ? teamMap.get(match.team1_id) || null : null,
+      team2: match.team2_id ? teamMap.get(match.team2_id) || null : null,
       team3: match.team3_id ? teamMap.get(match.team3_id) || null : null,
       team4: match.team4_id ? teamMap.get(match.team4_id) || null : null,
       winner1: match.winner1_id ? teamMap.get(match.winner1_id) || null : null,

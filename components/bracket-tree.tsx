@@ -1,14 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import type { BracketName, EnrichedMatch, Team } from '@/types/tournament';
-import { displayTeamName, roundLabel, winnerIdsForMatch } from '@/lib/tournament-utils';
+import type { BracketName, EnrichedMatch, SeniorSeries, Team } from '@/types/tournament';
+import { displayTeamName, roundLabel, totalRoundsFor, winnerIdsForMatch, type SeriesChampion } from '@/lib/tournament-utils';
 import { TeacherBadge } from '@/components/teacher-badge';
-
-const roundCounts: Record<BracketName, number> = {
-  senior: 5,
-  junior: 4
-};
 
 function getPlacement(match: EnrichedMatch, teamId: string) {
   const winnerIds = [match.winner1_id, match.winner2_id].filter(Boolean) as string[];
@@ -102,8 +97,67 @@ const roundColumns: Record<number, string> = {
   6: 'lg:grid-cols-6'
 };
 
-export function BracketTree({ matches, bracket, highlightRound }: { matches: EnrichedMatch[]; bracket: BracketName; highlightRound?: number }) {
-  const totalRounds = roundCounts[bracket];
+// Closing column for a concluded series: who actually lifted it. Sits after the
+// grand final so the tree reads left-to-right all the way to the trophy, instead
+// of just stopping at the last match.
+function WinnersColumn({ champion }: { champion: SeriesChampion }) {
+  return (
+    <section className="flex flex-col rounded-2xl border border-gold/40 bg-gold/[0.04] p-3">
+      <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-gold/40 bg-ink/60 px-3 py-2.5">
+        <span className="flex items-baseline gap-2">
+          <span className="font-display text-xs leading-none text-gold/50">★</span>
+          <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-gold">Winners</span>
+        </span>
+      </div>
+
+      <article className="relative overflow-hidden rounded-xl border border-gold/45 bg-gradient-to-b from-surface to-ink/90 p-3 shadow-card">
+        <div className="pointer-events-none absolute -right-6 -top-8 font-display text-[5rem] leading-none text-gold/[0.07]">01</div>
+
+        <div className="relative">
+          <p className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-gold">Champion</p>
+          <p className="mt-1.5 flex items-center gap-1.5">
+            <span className="min-w-0 break-words font-display text-lg uppercase leading-tight tracking-wide text-gold">
+              {displayTeamName(champion.champion.name)}
+            </span>
+            <TeacherBadge team={champion.champion} />
+          </p>
+          <p className="digits mt-1 font-display text-3xl leading-none text-gold">{champion.championScore}</p>
+
+          {champion.runnerUp ? (
+            <div className="mt-3 border-t border-line/70 pt-2.5">
+              <p className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-ash">Runner-up</p>
+              <p className="mt-1 flex items-center gap-1.5">
+                <span className="min-w-0 break-words text-[12px] font-bold leading-tight text-bone">
+                  {displayTeamName(champion.runnerUp.name)}
+                </span>
+                <TeacherBadge team={champion.runnerUp} />
+              </p>
+              <p className="digits mt-0.5 font-display text-xl leading-none text-bone">{champion.runnerUpScore}</p>
+            </div>
+          ) : null}
+        </div>
+      </article>
+    </section>
+  );
+}
+
+export function BracketTree({
+  matches,
+  bracket,
+  highlightRound,
+  series = 'year12',
+  champion
+}: {
+  matches: EnrichedMatch[];
+  bracket: BracketName;
+  highlightRound?: number;
+  /** Which senior series — each runs a different number of rounds with its own labels. */
+  series?: SeniorSeries;
+  /** When set, a closing "Winners" column is appended after the grand final. */
+  champion?: SeriesChampion | null;
+}) {
+  const totalRounds = totalRoundsFor(bracket, series);
+  const columns = totalRounds + (champion ? 1 : 0);
   const [collapsedRounds, setCollapsedRounds] = useState<number[]>([]);
 
   const toggleRound = (round: number) => {
@@ -112,7 +166,7 @@ export function BracketTree({ matches, bracket, highlightRound }: { matches: Enr
 
   return (
     <div className="w-full">
-      <div className={`grid w-full gap-4 md:grid-cols-1 ${roundColumns[totalRounds] ?? 'lg:grid-cols-5'}`}>
+      <div className={`grid w-full gap-4 md:grid-cols-1 ${roundColumns[columns] ?? 'lg:grid-cols-5'}`}>
         {Array.from({ length: totalRounds }, (_, index) => {
           const roundNumber = index + 1;
           const roundMatches = matches.filter((match) => match.round === roundNumber).sort((a, b) => a.match_number - b.match_number);
@@ -132,7 +186,7 @@ export function BracketTree({ matches, bracket, highlightRound }: { matches: Enr
               >
                 <span className="flex items-baseline gap-2">
                   <span className="font-display text-xs leading-none text-volt/40">{String(roundNumber).padStart(2, '0')}</span>
-                  <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-bone">{roundLabel(bracket, roundNumber)}</span>
+                  <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-bone">{roundLabel(bracket, roundNumber, series)}</span>
                 </span>
                 <span className="text-[10px] text-ash">{isCollapsed ? '▼' : '▲'}</span>
               </button>
@@ -151,6 +205,8 @@ export function BracketTree({ matches, bracket, highlightRound }: { matches: Enr
             </section>
           );
         })}
+
+        {champion ? <WinnersColumn champion={champion} /> : null}
       </div>
     </div>
   );

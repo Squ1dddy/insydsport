@@ -1,5 +1,6 @@
-import type { BracketName, Match, Team } from '@/types/tournament';
+import type { BracketName, Match, SeniorSeries, Team } from '@/types/tournament';
 import { createSupabaseServerClient } from '@/lib/supabase';
+import { advanceCount } from '@/lib/tournament-utils';
 
 type TeamSeed = Omit<Team, 'id' | 'points' | 'games_played' | 'is_teacher' | 'star_count'> & {
   points?: number;
@@ -8,14 +9,26 @@ type TeamSeed = Omit<Team, 'id' | 'points' | 'games_played' | 'is_teacher' | 'st
 };
 type MatchSeed = Omit<
   Match,
-  'id' | 'scheduled_date' | 'team1_id' | 'team2_id' | 'team3_id' | 'team4_id' | 'winner1_id' | 'winner2_id' | 'played_at' | 'duration_minutes' | 'is_next_term'
+  | 'id'
+  | 'scheduled_date'
+  | 'team1_id'
+  | 'team2_id'
+  | 'team3_id'
+  | 'team4_id'
+  | 'winner1_id'
+  | 'winner2_id'
+  | 'played_at'
+  | 'duration_minutes'
+  | 'is_next_term'
+  | 'series'
 > & {
   team1_name: string;
   team2_name: string;
   team3_name?: string | null;
   team4_name?: string | null;
   played_at?: string | null;
-  is_next_term?: boolean;
+  /** Which senior series. Defaults to 'year12'; 'year11' also sets is_next_term. */
+  series?: SeniorSeries;
 };
 
 export const seniorTeams: TeamSeed[] = [
@@ -95,8 +108,10 @@ export const teacherTeams: TeamSeed[] = [
   { name: 'The Ancients', player1: 'Chris E', player2: 'Nick S', skill_level: 5, bracket: 'senior', year_group: 'Teacher', status: 'active', is_teacher: true }
 ];
 
-// Year 11 plays next term. They sit in the senior bracket but every Year 11 match
-// is flagged is_next_term and tucked behind the "TBC Next Term" toggle. Teams whose
+// Year 11 sit in the senior bracket but run their own series (series='year11',
+// is_next_term=true), with dates entered per match rather than the fixed day
+// mapping. They are the live front-page schedule now that Year 12 has finished.
+// Teams whose
 // players signed up on multiple teams are kept on the system but left out of matches
 // until the duplicates are resolved: Jethro & coolposeonthewall (Alek D),
 // Conrad F & butter turtle (Conrad F / Tristan T).
@@ -128,11 +143,11 @@ export const matchSeeds: MatchSeed[] = [
   // Juniors run a round-robin (see juniorTeams standings), so they have no knockout
   // match fixtures — their results live on the points ladder, not in `matches`.
   //
-  // Year 11 plays next term: senior bracket, flagged is_next_term, match_number
-  // offset to 101+ so it never collides with the Year 12 round-1 fixtures (1-7).
+  // Year 11's own senior series (series='year11'), match_number offset to the 101+
+  // band so it never collides with the Year 12 round-1 fixtures (1-7).
   // Grouped by skill within 1-2; duplicate-player teams left unplaced.
-  { bracket: 'senior', round: 1, match_number: 101, scheduled_day: 6, team1_name: 'MO & JO', team2_name: 'Hot shotz', team3_name: 'pogfrogmorten', team4_name: 'carel l', team1_score: 0, team2_score: 0, team3_score: 0, team4_score: 0, status: 'upcoming', is_skill_stretch: false, is_next_term: true },
-  { bracket: 'senior', round: 1, match_number: 102, scheduled_day: 6, team1_name: 'Trouble Squared', team2_name: 'Sodabean', team3_name: '4Square', team4_name: 'Bounce bros', team1_score: 0, team2_score: 0, team3_score: 0, team4_score: 0, status: 'upcoming', is_skill_stretch: false, is_next_term: true }
+  { bracket: 'senior', round: 1, match_number: 101, scheduled_day: 6, team1_name: 'MO & JO', team2_name: 'Hot shotz', team3_name: 'pogfrogmorten', team4_name: 'carel l', team1_score: 0, team2_score: 0, team3_score: 0, team4_score: 0, status: 'upcoming', is_skill_stretch: false, series: 'year11' },
+  { bracket: 'senior', round: 1, match_number: 102, scheduled_day: 6, team1_name: 'Trouble Squared', team2_name: 'Sodabean', team3_name: '4Square', team4_name: 'Bounce bros', team1_score: 0, team2_score: 0, team3_score: 0, team4_score: 0, status: 'upcoming', is_skill_stretch: false, series: 'year11' }
 ];
 
 function buildTeamMap(teams: Team[]) {
@@ -253,7 +268,9 @@ export async function seedDatabase() {
       winner2_id: null,
       played_at: match.played_at || (match.status === 'completed' ? new Date().toISOString() : null),
       duration_minutes: null,
-      is_next_term: match.is_next_term ?? false
+      series: match.series ?? 'year12',
+      // Kept in sync with the series for anything still reading the old flag.
+      is_next_term: (match.series ?? 'year12') === 'year11'
     };
   });
 
@@ -295,8 +312,10 @@ export async function seedDatabase() {
 
   for (const match of completedMatches) {
     const entries = scoreEntriesFromMatchRow(match, refreshedTeamMap).sort((a, b) => b.score - a.score);
-    const winners = entries.slice(0, 2);
-    const losers = entries.slice(2);
+    // 1 winner in a 1v1, 2 otherwise — same rule as the live scoring path.
+    const advancing = advanceCount(entries.length);
+    const winners = entries.slice(0, advancing);
+    const losers = entries.slice(advancing);
 
     for (const winner of winners) {
       const record = recordMap.get(winner.name);
@@ -340,7 +359,7 @@ export async function seedDatabase() {
   const insertedMatches = matchRows.filter((match) => match.status === 'completed');
   for (const match of insertedMatches) {
     const entries = scoreEntriesFromMatchRow(match, refreshedTeamMap).sort((a, b) => b.score - a.score);
-    const winners = entries.slice(0, 2).map((entry) => entry.name);
+    const winners = entries.slice(0, advanceCount(entries.length)).map((entry) => entry.name);
     const { data: existingMatch, error: matchLookupError } = await supabase
       .from('matches')
       .select('id')

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { EnrichedMatch } from '@/types/tournament';
-import { displayTeamName, matchLabel, roundLabel, teamBadgeClass, winnerIdsForMatch } from '@/lib/tournament-utils';
+import { advanceCount, displayTeamName, isGrandFinal, matchLabel, roundLabel, teamBadgeClass, winnerIdsForMatch } from '@/lib/tournament-utils';
 import { TeamTooltip } from '@/components/team-tooltip';
 import { FollowButton } from '@/components/follow-button';
 import { TeacherBadge } from '@/components/teacher-badge';
@@ -128,6 +128,7 @@ export function MatchCard({ match, compact = false }: { match: EnrichedMatch; co
   }, [match, isCompleted]);
 
   const isWinner = (teamId?: string | null) => Boolean(teamId && winnerIds.includes(teamId));
+  const teamCount = [match.team1_id, match.team2_id, match.team3_id, match.team4_id].filter(Boolean).length;
   const [scoreTick, setScoreTick] = useState(0);
   const scoreKey = `${match.team1_score}-${match.team2_score}-${match.team3_score}-${match.team4_score}-${match.status}`;
 
@@ -144,7 +145,7 @@ export function MatchCard({ match, compact = false }: { match: EnrichedMatch; co
       <div className="flex items-start justify-between gap-3 border-b border-line/70 pb-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-display text-base uppercase leading-none tracking-wide text-bone">{roundLabel(match.bracket, match.round)}</span>
+            <span className="font-display text-base uppercase leading-none tracking-wide text-bone">{roundLabel(match.bracket, match.round, match.series)}</span>
           </div>
           <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-ash">{matchLabel(match)}</p>
         </div>
@@ -168,7 +169,19 @@ export function MatchCard({ match, compact = false }: { match: EnrichedMatch; co
         <span className="inline-flex items-center gap-1.5">
           {match.is_skill_stretch ? <span className="text-flare">▲ Skill stretch</span> : 'Standard match'}
         </span>
-        <span className={isCompleted ? 'text-volt' : ''}>{isCompleted ? 'Winners locked' : 'Top 2 advance'}</span>
+        <span className={isCompleted ? 'text-volt' : ''}>
+          {isCompleted
+            ? isGrandFinal(match)
+              ? 'Champion crowned'
+              : winnerIds.length === 1
+                ? 'Winner locked'
+                : 'Winners locked'
+            : isGrandFinal(match)
+              ? 'Winner takes the title'
+              : advanceCount(teamCount) === 1
+                ? 'Winner advances'
+                : 'Top 2 advance'}
+        </span>
       </div>
     </article>
   );

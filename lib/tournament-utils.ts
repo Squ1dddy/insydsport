@@ -1,16 +1,56 @@
-import type { BracketName, EnrichedMatch, Match, Team } from '@/types/tournament';
+import type { BracketName, EnrichedMatch, Match, SeniorSeries, Team } from '@/types/tournament';
 
-export function roundLabel(bracket: BracketName, round: number) {
+// The senior bracket carries three independent knockout series that share it:
+//   • year12  — concluded (5 rounds: R1 → R2 → QF → SF → GF). Champion: Bessintown.
+//   • year11  — running now (12 teams → 3 R1 matches → 6 advance → 2 semis →
+//               final, so 3 rounds, NOT 5).
+//   • teacher — concluded (2 rounds: one 4-team round, then a 1v1 final). Staff.
+// Carried on `Match.series`; /api/state guarantees it is populated even before the
+// supabase/match-series.sql migration is run.
+export type { SeniorSeries };
+
+/** Display order for the senior series switch — the live one first. */
+export const SENIOR_SERIES: SeniorSeries[] = ['year11', 'year12', 'teacher'];
+
+export function seriesOf(match: Pick<Match, 'bracket' | 'series'>): SeniorSeries | null {
+  return match.bracket === 'senior' ? match.series : null;
+}
+
+export function seriesLabel(series: SeniorSeries) {
+  return series === 'year11' ? 'Year 11' : series === 'teacher' ? 'Teachers' : 'Year 12';
+}
+
+// How many rounds a bracket/series runs to. Drives the bracket-tree column count,
+// the round pills, and the auto-advance cap in /api/admin/matches.
+export function totalRoundsFor(bracket: BracketName, series: SeniorSeries = 'year12'): number {
+  if (bracket === 'junior') return 4;
+  if (series === 'year11') return 3;
+  if (series === 'teacher') return 2;
+  return 5;
+}
+
+export function roundLabel(bracket: BracketName, round: number, series: SeniorSeries = 'year12') {
   if (bracket === 'senior') {
-    return ['Round 1', 'Round 2', 'Quarterfinals', 'Semifinals', 'Grand Final'][round - 1] || `Round ${round}`;
+    const labels =
+      series === 'year11'
+        ? ['Round 1', 'Semifinals', 'Grand Final']
+        : series === 'teacher'
+          ? ['Round 1', 'Grand Final']
+          : ['Round 1', 'Round 2', 'Quarterfinals', 'Semifinals', 'Grand Final'];
+    return labels[round - 1] || `Round ${round}`;
   }
 
   return ['Round 1', 'Round 2', 'Semifinals', 'Grand Final'][round - 1] || `Round ${round}`;
 }
 
 export function matchLabel(match: EnrichedMatch) {
-  if (match.is_next_term) {
-    return `TBC · Next Term — Match ${match.match_number}`;
+  // Only the Year 12 series uses the fixed day→date mapping. Year 11 and teacher
+  // matches are date-driven: they read "Date TBC" until an admin enters a real date
+  // (Admin → Matches → Date), then switch to that date automatically.
+  if (match.bracket === 'senior' && match.series !== 'year12') {
+    return match.scheduled_date
+      ? `${formatAestDate(getMatchDate(match))} — Match ${match.match_number}`
+      : `Date TBC — Match ${match.match_number}`;
   }
   const date = getMatchDate(match);
   const dateStr = date ? ` (${formatAestDate(date)})` : '';
@@ -46,62 +86,6 @@ export function getScheduledDate(day: number): string | null {
   return mapping[day] || null;
 }
 
-// YYYY-MM-DD in Sydney time — lets us compare "which day are we on" by calendar
-// date (en-CA formats as YYYY-MM-DD, which sorts lexicographically).
-function aestDateKey(date: Date): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Australia/Sydney',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).format(date);
-}
-
-// Returns the "current" scheduled day, driven by today's AEST date and AWARE of
-// per-match `scheduled_date` overrides. For each day it takes the earliest match
-// date on that day (falling back to the fixed day→date mapping for days with no
-// matches), then returns the highest day whose date is today or earlier. A day
-// becomes "current" on its actual calendar date. Day 6+ next-term (Year 11)
-// matches are intentionally excluded.
-//
-// Passing no matches falls back to the fixed mapping (legacy behaviour).
-export function getCurrentScheduledDay(
-  matches: Pick<Match, 'scheduled_day' | 'scheduled_date' | 'is_next_term'>[] = [],
-  now: Date = new Date()
-): number {
-  const todayKey = aestDateKey(now);
-
-  // day -> earliest YYYY-MM-DD (AEST) among that day's current-term matches.
-  const dayKeys = new Map<number, string>();
-  for (const match of matches) {
-    if (match.is_next_term) continue;
-    const iso = getMatchDate(match);
-    if (!iso) continue;
-    const key = aestDateKey(new Date(iso));
-    const existing = dayKeys.get(match.scheduled_day);
-    if (existing === undefined || key < existing) {
-      dayKeys.set(match.scheduled_day, key);
-    }
-  }
-
-  // Ensure baseline days 1-5 always have a date from the fixed mapping.
-  for (let day = 1; day <= 5; day += 1) {
-    if (!dayKeys.has(day)) {
-      const iso = getScheduledDate(day);
-      if (iso) dayKeys.set(day, aestDateKey(new Date(iso)));
-    }
-  }
-
-  const days = [...dayKeys.keys()].sort((a, b) => a - b);
-  let result = days[0] ?? 1;
-  for (const day of days) {
-    if (dayKeys.get(day)! <= todayKey) {
-      result = day;
-    }
-  }
-  return result;
-}
-
 export function matchTeamsLabel(match: EnrichedMatch) {
   return [match.team1, match.team2, match.team3, match.team4]
     .filter(Boolean)
@@ -133,6 +117,26 @@ export function skillDotClass(skill: number) {
   );
 }
 
+/**
+ * How many teams come out of a match.
+ *
+ * The headline format is "4 teams per match, top 2 advance", but that must not be
+ * applied blindly: a **1v1 has exactly one winner**. Advancing 2 of 2 would advance
+ * the team that just lost — which is what made the grand final read "x and etti
+ * advanced" when they had in fact been beaten 15–14.
+ *
+ * So: 2 teams → 1 advances. 3 or 4 teams → 2 advance. This is the single source of
+ * truth; nothing should hardcode 2.
+ */
+export function advanceCount(teamCount: number): number {
+  return teamCount <= 2 ? 1 : 2;
+}
+
+/** True when this match is the last round of its bracket/series — i.e. the final. */
+export function isGrandFinal(match: Pick<Match, 'bracket' | 'round' | 'series'>) {
+  return match.round === totalRoundsFor(match.bracket, match.series);
+}
+
 export function winnerIdsForMatch(match: EnrichedMatch) {
   const teams = [
     { id: match.team1_id, score: match.team1_score },
@@ -141,7 +145,10 @@ export function winnerIdsForMatch(match: EnrichedMatch) {
     { id: match.team4_id, score: match.team4_score }
   ].filter((item): item is { id: string; score: number } => Boolean(item.id));
 
-  return teams.sort((a, b) => b.score - a.score).slice(0, Math.min(2, teams.length)).map((item) => item.id);
+  return teams
+    .sort((a, b) => b.score - a.score)
+    .slice(0, advanceCount(teams.length))
+    .map((item) => item.id);
 }
 
 export function formatAestTime(iso: string | null) {
@@ -220,8 +227,12 @@ export function getMatchPlacements(match: EnrichedMatch) {
   ].filter((entry): entry is { id: string; score: number } => Boolean(entry.id));
 
   const sorted = [...entries].sort((a, b) => b.score - a.score);
-  const tieAtCutoff = sorted.length >= 4 && sorted[1]?.score === sorted[2]?.score;
-  const cutoff = sorted[1]?.score ?? 0;
+  // The cutoff sits at however many actually advance — 1 in a 1v1, 2 otherwise —
+  // so a level scoreline is flagged for admin review at the right boundary. In a
+  // 1v1 that means a genuine draw; in a 4-team match, a tie for 2nd/3rd.
+  const advancing = advanceCount(entries.length);
+  const tieAtCutoff = sorted.length > advancing && sorted[advancing - 1]?.score === sorted[advancing]?.score;
+  const cutoff = sorted[advancing - 1]?.score ?? 0;
 
   return {
     tieAtCutoff,
@@ -231,7 +242,7 @@ export function getMatchPlacements(match: EnrichedMatch) {
           return [entry.id, 'tie'];
         }
 
-        const advanced = sorted.findIndex((item) => item.id === entry.id) < 2;
+        const advanced = sorted.findIndex((item) => item.id === entry.id) < advancing;
         return [entry.id, advanced ? 'advanced' : 'eliminated'];
       })
     )
@@ -297,7 +308,10 @@ export function getTeamStats(matches: EnrichedMatch[], teams: Team[], bracket: B
       );
   }
 
-  const completed = matches.filter((m) => m.status === 'completed' && !m.is_next_term && m.bracket === bracket);
+  // Both senior series count. A senior team only ever plays in one of them, so
+  // including Year 11 adds its teams' real totals without mixing anyone's numbers —
+  // and excluding it would silently zero the series that is actually running.
+  const completed = matches.filter((m) => m.status === 'completed' && m.bracket === bracket);
   const byTeam = new Map<string, TeamStat>();
   for (const match of completed) {
     const slots = [
@@ -330,8 +344,13 @@ export function teamBadgeClass(team?: Team | null, winnerIds: string[] = []) {
 export interface DayWinnersBanner {
   /** The scheduled_day number of the most-recently-completed senior day. */
   day: number;
-  /** ISO string from getScheduledDate for display formatting. */
+  /** ISO string for display formatting — a real per-match date when one exists. */
   dateIso: string | null;
+  /** The round those matches belong to — how Year 11 days are labelled, since
+   *  they carry no day→date mapping and "Day 6" means nothing to a viewer. */
+  round: number;
+  /** Which series the winners came from. */
+  series: SeniorSeries;
   /** Unix ms of the earliest played_at in the day — the shared 24h clock anchor. */
   anchorMs: number;
   /** anchorMs + 24 hours — when both sets disappear together. */
@@ -353,14 +372,17 @@ export interface DayWinnersBanner {
  */
 export function getSeniorDayWinners(
   matches: EnrichedMatch[],
-  nowMs: number = Date.now()
+  nowMs: number = Date.now(),
+  series: SeniorSeries = 'year12'
 ): DayWinnersBanner | null {
-  // Senior completed matches with a completion timestamp and at least one winner.
+  // Senior completed matches with a completion timestamp and at least one winner,
+  // scoped to one series — the three senior series run independently, so a concluded
+  // Year 12 or teacher result must never surface as "today's winners" for Year 11.
   const candidates = matches.filter(
     (m) =>
       m.bracket === 'senior' &&
       m.status === 'completed' &&
-      !m.is_next_term &&
+      m.series === series &&
       m.played_at !== null &&
       (m.winner1 || m.winner2)
   );
@@ -391,9 +413,65 @@ export function getSeniorDayWinners(
 
   return {
     day,
-    dateIso: getScheduledDate(day),
+    // Prefer a real per-match date (the only date a Year 11 match ever has) and
+    // fall back to the fixed day→date mapping for the Year 12 series.
+    dateIso: getMatchDate(entries[0].match) ?? getScheduledDate(day),
+    round: entries[0].match.round,
+    series: entries[0].match.series,
     anchorMs,
     expiresAtMs,
     entries
+  };
+}
+
+export interface SeriesChampion {
+  champion: Team;
+  championScore: number;
+  runnerUp: Team | null;
+  runnerUpScore: number | null;
+  /** True when the top two scores are level — the title is then undecided. */
+  tied: boolean;
+  /** The grand-final match itself. */
+  match: EnrichedMatch;
+}
+
+/**
+ * The champion of a knockout series: the top scorer of its completed final-round
+ * match, or null while the final is unplayed.
+ *
+ * Note the 4-team format records BOTH of the top 2 in `winner1_id`/`winner2_id`
+ * even in the grand final, so the title cannot be read off those columns — it is
+ * decided on score. A level top-two sets `tied`, which callers must handle rather
+ * than crowning an arbitrary side.
+ */
+export function getSeriesChampion(
+  matches: EnrichedMatch[],
+  bracket: BracketName = 'senior',
+  series: SeniorSeries = 'year12'
+): SeriesChampion | null {
+  const finalRound = totalRoundsFor(bracket, series);
+  const final = matches.find(
+    (m) => m.bracket === bracket && m.series === series && m.round === finalRound && m.status === 'completed'
+  );
+  if (!final) return null;
+
+  const ranked = [
+    { team: final.team1, score: final.team1_score },
+    { team: final.team2, score: final.team2_score },
+    { team: final.team3, score: final.team3_score },
+    { team: final.team4, score: final.team4_score }
+  ]
+    .filter((entry): entry is { team: Team; score: number } => Boolean(entry.team))
+    .sort((a, b) => b.score - a.score);
+
+  if (ranked.length === 0) return null;
+
+  return {
+    champion: ranked[0].team,
+    championScore: ranked[0].score,
+    runnerUp: ranked[1]?.team ?? null,
+    runnerUpScore: ranked[1]?.score ?? null,
+    tied: ranked.length > 1 && ranked[0].score === ranked[1].score,
+    match: final
   };
 }

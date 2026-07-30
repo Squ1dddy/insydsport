@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase';
 import type { Match, Notification, Team } from '@/types/tournament';
 import { verifyAdminPassword } from '@/lib/admin-auth';
+import { advanceCount } from '@/lib/tournament-utils';
 
 type ActionBody =
   | { action: 'set-live'; matchId: string }
@@ -53,7 +54,10 @@ type ActionBody =
     }
   | {
       action: 'create-match';
-      payload: Omit<Match, 'id' | 'scheduled_date' | 'team1_score' | 'team2_score' | 'team3_score' | 'team4_score' | 'winner1_id' | 'winner2_id' | 'played_at' | 'duration_minutes'>;
+      payload: Omit<
+        Match,
+        'id' | 'scheduled_date' | 'team1_score' | 'team2_score' | 'team3_score' | 'team4_score' | 'winner1_id' | 'winner2_id' | 'played_at' | 'duration_minutes'
+      >;
     }
   | { action: 'clear-scores' }
   | { action: 'set-current-day'; day: number | null }
@@ -68,8 +72,22 @@ function asTeamIds(match: Match) {
   return [match.team1_id, match.team2_id, match.team3_id, match.team4_id].filter(Boolean) as string[];
 }
 
-function nextRoundLimit(bracket: Match['bracket']) {
-  return bracket === 'senior' ? 5 : 4;
+// How many rounds the match's series runs to. The senior bracket carries three
+// series with different depths — Year 12 five rounds, the 12-team Year 11 series
+// three, Teachers two — so the cap must follow `series`, otherwise completing a
+// grand final would spawn a phantom extra round.
+//
+// Falls back to deriving from `is_next_term` when `series` is absent, so this path
+// is correct before supabase/match-series.sql is run. Note the teacher series
+// cannot be derived here (it needs the team rows), which is only a concern if
+// someone re-completes a teacher match pre-migration — it would then be treated as
+// year12 and cap at 5 instead of 2.
+function nextRoundLimit(match: Pick<Match, 'bracket' | 'is_next_term' | 'series'>) {
+  if (match.bracket === 'junior') return 4;
+  const series = match.series ?? (match.is_next_term ? 'year11' : 'year12');
+  if (series === 'year11') return 3;
+  if (series === 'teacher') return 2;
+  return 5;
 }
 
 function targetSlot(sourceMatchNumber: number) {
@@ -90,24 +108,35 @@ function resolvedWinners(match: Match, winnerIds?: string[]) {
     .filter((item): item is { id: string; score: number } => Boolean(item.id))
     .sort((a, b) => b.score - a.score);
 
-  return rankings.slice(0, Math.min(2, rankings.length)).map((item) => item.id);
+  // Top 2 out of 3 or 4 teams — but a 1v1 has ONE winner. Advancing both would
+  // record the losing side as a winner. See advanceCount in lib/tournament-utils.
+  return rankings.slice(0, advanceCount(rankings.length)).map((item) => item.id);
 }
 
 async function upsertNextRoundMatch(supabase: ReturnType<typeof createSupabaseServerClient>, match: Match, winnerIds: string[]) {
   const nextRound = match.round + 1;
-  if (nextRound > nextRoundLimit(match.bracket)) {
+  if (nextRound > nextRoundLimit(match)) {
     return;
   }
 
   const nextMatchNumber = Math.ceil(match.match_number / 2);
   const slots = targetSlot(match.match_number);
-  const { data: existingNextMatch, error: nextMatchError } = await supabase
+  // Scoped to the same series: bracket+round+match_number alone is not unique across
+  // the three senior series, so without this a result could be slotted into another
+  // series' match that happened to share a match number. `series` is only added to
+  // the filter when the parent row actually carries it, so this still works before
+  // supabase/match-series.sql has been run (is_next_term alone, as before).
+  let lookup = supabase
     .from('matches')
     .select('*')
     .eq('bracket', match.bracket)
     .eq('round', nextRound)
     .eq('match_number', nextMatchNumber)
-    .maybeSingle();
+    .eq('is_next_term', match.is_next_term);
+  if (match.series) {
+    lookup = lookup.eq('series', match.series);
+  }
+  const { data: existingNextMatch, error: nextMatchError } = await lookup.maybeSingle();
   if (nextMatchError) {
     throw nextMatchError;
   }
@@ -153,10 +182,12 @@ async function upsertNextRoundMatch(supabase: ReturnType<typeof createSupabaseSe
     winner2_id: null,
     played_at: null,
     duration_minutes: null,
-    // Keep the whole knockout line on the same side of the next-term divide as its
-    // parent, so a Year 11 ("next term") match never spawns a round into the
-    // current Year 12 schedule.
-    is_next_term: match.is_next_term
+    // Keep the whole knockout line inside its parent's series, so a Year 11 or
+    // teacher match never spawns a round into another series' schedule. `series` is
+    // only written when the parent carries it, so this insert still succeeds before
+    // supabase/match-series.sql has been run.
+    is_next_term: match.is_next_term,
+    ...(match.series ? { series: match.series } : {})
   });
   if (error) {
     throw error;

@@ -2,6 +2,15 @@ export type BracketName = 'senior' | 'junior';
 export type MatchStatus = 'upcoming' | 'live' | 'completed';
 export type TeamStatus = 'active' | 'eliminated' | 'bye';
 
+// The senior bracket holds three independent knockout series, carried on
+// `Match.series`:
+//   • year12  — concluded, 5 rounds. Champion: Bessintown.
+//   • year11  — running, 3 rounds. The front-page schedule.
+//   • teacher — concluded, 2 rounds (4-team round 1 → 1v1 final). Staff teams.
+// See totalRoundsFor/roundLabel in lib/tournament-utils. Juniors run a round-robin
+// ladder and have no series.
+export type SeniorSeries = 'year12' | 'year11' | 'teacher';
+
 export interface Team {
   id: string;
   name: string;
@@ -46,9 +55,13 @@ export interface Match {
   is_skill_stretch: boolean;
   played_at: string | null;
   duration_minutes: number | null;
-  // Year 11 plays next term — these matches are kept behind a "TBC Next Term"
-  // toggle and excluded from the current schedule / This Week views.
+  // Legacy two-way series flag, kept in sync with `series === 'year11'`. Prefer
+  // `series` — this cannot express the teacher series.
   is_next_term: boolean;
+  // Which senior series this match belongs to. Always present on matches returned
+  // by /api/state: that route reads the `series` column when it exists and derives
+  // the value otherwise, so consumers never have to handle it being missing.
+  series: SeniorSeries;
 }
 
 export interface EnrichedMatch extends Match {
