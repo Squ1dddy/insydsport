@@ -1,8 +1,19 @@
 node_modules
 .next
-.env.local
 .DS_Store
-.git
 *.log
+
+# Local env. Never commit real keys.
+.env
+.env.local
+.env*.local
+
+# Build artefacts
+*.tsbuildinfo
 **/node_modules/@next/swc-win32-x64-msvc/*.node
+
+# Editor and tooling
+.claude/
+.claude-flow/
 .playwright-mcp/
+.vscode/

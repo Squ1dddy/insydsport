@@ -57,7 +57,7 @@ export const seniorTeams: TeamSeed[] = [
   { name: 'K8ieGr8 & lilhuddyonthebeat2016', player1: 'Hudson H', player2: 'Kate G', skill_level: 1, bracket: 'senior', year_group: 'Year 12, Week 1', status: 'active' },
   { name: 'Caick', player1: 'Cairo E', player2: 'Nick R', skill_level: 3, bracket: 'senior', year_group: 'Year 12, Week 1', status: 'active' },
   { name: 'PJ method', player1: 'Tyson K', player2: 'Eva M', skill_level: 3, bracket: 'senior', year_group: 'Year 12, Week 1', status: 'active' },
-  { name: "Joe R", player1: 'Samuel V', player2: 'Bodhi R', skill_level: 4, bracket: 'senior', year_group: 'Year 12, Week 1', status: 'active' },
+  { name: "Joe R's", player1: 'Samuel V', player2: 'Bodhi R', skill_level: 4, bracket: 'senior', year_group: 'Year 12, Week 1', status: 'active' },
   { name: 'Ball Slappers', player1: 'Charlie H', player2: 'Cuba M', skill_level: 5, bracket: 'senior', year_group: 'Year 12, Week 1', status: 'active' },
   { name: 'The Chronicles', player1: 'Rain J', player2: 'Leopold K', skill_level: 4, bracket: 'senior', year_group: 'Year 12, Week 1', status: 'active' },
   { name: 'Holivy', player1: 'Holly D', player2: 'Olivia S', skill_level: 3, bracket: 'senior', year_group: 'Year 12, Week 1', status: 'active' }
@@ -138,7 +138,7 @@ export const matchSeeds: MatchSeed[] = [
   { bracket: 'senior', round: 1, match_number: 3, scheduled_day: 2, team1_name: 'Me and My Hero', team2_name: 'Finn P', team3_name: 'Bessintown', team4_name: 'CHC', team1_score: 0, team2_score: 0, team3_score: 0, team4_score: 0, status: 'upcoming', is_skill_stretch: false },
   { bracket: 'senior', round: 1, match_number: 4, scheduled_day: 2, team1_name: 'Xavier A', team2_name: 'Curdled Varangians', team3_name: 'Ball Slappers', team4_name: 'Microwave', team1_score: 0, team2_score: 0, team3_score: 0, team4_score: 0, status: 'upcoming', is_skill_stretch: true },
   { bracket: 'senior', round: 1, match_number: 5, scheduled_day: 3, team1_name: 'SAJA BOYS', team2_name: 'Mr Kazanis fan club', team3_name: 'Plants v Zombies', team4_name: 'The Handball Kingz', team1_score: 0, team2_score: 0, team3_score: 0, team4_score: 0, status: 'upcoming', is_skill_stretch: false },
-  { bracket: 'senior', round: 1, match_number: 6, scheduled_day: 3, team1_name: 'SydneyWolves', team2_name: "Joe R", team3_name: 'The Chronicles', team4_name: 'Caick', team1_score: 0, team2_score: 0, team3_score: 0, team4_score: 0, status: 'upcoming', is_skill_stretch: true },
+  { bracket: 'senior', round: 1, match_number: 6, scheduled_day: 3, team1_name: 'SydneyWolves', team2_name: "Joe R's", team3_name: 'The Chronicles', team4_name: 'Caick', team1_score: 0, team2_score: 0, team3_score: 0, team4_score: 0, status: 'upcoming', is_skill_stretch: true },
   { bracket: 'senior', round: 1, match_number: 7, scheduled_day: 4, team1_name: 'PJ method', team2_name: 'Holivy', team3_name: 'The Greens', team4_name: 'K8ieGr8 & lilhuddyonthebeat2016', team1_score: 0, team2_score: 0, team3_score: 0, team4_score: 0, status: 'upcoming', is_skill_stretch: true },
   // Juniors run a round-robin (see juniorTeams standings), so they have no knockout
   // match fixtures — their results live on the points ladder, not in `matches`.
