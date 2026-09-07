@@ -76,6 +76,14 @@ There are no user accounts. One shared admin password, one organiser. Auth would
 
 `is_next_term` is legacy. It is a two-way flag kept in sync with `series === 'year11'`, left in so older rows keep working. `series` is the field to use. If this ran again I would drop it in a migration.
 
+## How this was built
+
+I used AI assistance throughout this build, and I would rather say so than have it inferred. It writes code quickly. It does not decide what the code should do, and on this project that distinction was most of the work.
+
+The Row Level Security gap above is the clearest example. A model will happily hand you a working Supabase client that ships an anon key to the browser, because that code runs and the app looks finished. Knowing that a read-write key in the browser is a hole, and knowing to reach for RLS to close it, was the part I had to bring. The same goes for the fail-closed admin check, keeping the score journal on the device rather than trusting the network, and the decisions about what an organiser actually needs on screen while a match is running. I made those calls, then used AI to get there faster, and I checked what came back because I am the one who has to defend it.
+
+The tournament did the rest. 70 teams on school wifi during live rounds surfaced failure modes I would not have thought to test for, and every fix after launch came from watching people use it rather than from asking a model what might go wrong.
+
 ## Running it locally
 
 ```bash
